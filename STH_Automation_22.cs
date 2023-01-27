@@ -19,6 +19,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Forms;
 using adWin = Autodesk.Windows;
 using System.Linq;
+using OfficeOpenXml.Drawing.Chart;
 #endregion
 namespace STH_Automation_22
 {
@@ -45,6 +46,7 @@ namespace STH_Automation_22
             TaskDialog.Show("!", "Select a reference Grid to find orthogonal walls");
 
             Autodesk.Revit.DB.Grid Grid_ = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Grid")) as Autodesk.Revit.DB.Grid;
+            //Autodesk.Revit.DB.Wall el = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Grid")) as Autodesk.Revit.DB.Wall;
             Element el = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select an existing group"));
             LocationCurve lc = el.Location as LocationCurve;
             Autodesk.Revit.DB.LocationPoint lp = null;
@@ -315,6 +317,157 @@ namespace STH_Automation_22
         }
     }
 
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Wall_Angle_To_EleMarker : IExternalCommand
+    {
+
+        public XYZ InvCoord(XYZ MyCoord)
+        {
+            XYZ invcoord = new XYZ((Convert.ToDouble(MyCoord.X * -1)),
+                (Convert.ToDouble(MyCoord.Y * -1)),
+                (Convert.ToDouble(MyCoord.Z * -1)));
+            return invcoord;
+        }
+
+        static AddInId appId = new AddInId(new Guid("5F88CC78-A137-5609-AAF8-A478F3B24BAB"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+            XYZ DIR = null;
+            XYZ LineWallDir = null;
+            XYZ DirEnd;
+            double angle3 ;
+
+            TaskDialog.Show("!", "Select a Wall and an elevation");
+
+            //Autodesk.Revit.DB.Grid Grid_ = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Grid")) as Autodesk.Revit.DB.Grid;
+            ////Autodesk.Revit.DB.Wall el = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Grid")) as Autodesk.Revit.DB.Wall;
+            Element el = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select an existing group"));
+            Element el2 = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select an existing group"));
+            Autodesk.Revit.DB.LocationPoint lp = null;
+            ElevationMarker marker = el2 as ElevationMarker;
+            LocationCurve lc = el.Location as LocationCurve;
+            
+           
+            if (lc != null)
+            {
+                LineWallDir = (lc.Curve as Autodesk.Revit.DB.Line).Direction;
+            }
+            else
+            {
+                Location loc = el.Location;
+                lp = loc as Autodesk.Revit.DB.LocationPoint;
+
+                var fi = el as FamilyInstance;
+                DIR = fi.FacingOrientation;
+                DirEnd = DIR * (1100 / 304.8);
+            }
+
+            
+            
+        
+
+            using (Transaction tx = new Transaction(doc))
+            {
+                tx.Start("Create Wall Section View");
+                if (marker != null)
+                {
+
+
+                    BoundingBoxXYZ bb = marker.get_BoundingBox(doc.ActiveView);
+
+                    XYZ location = (bb.Max + bb.Min) / 2;
+
+                    if (lc != null)
+                    {
+                        Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(location, XYZ.BasisZ);
+                        angle3 = location.AngleTo(LineWallDir);
+                        double AngleOfRotation = angle3 * 180 / Math.PI;
+
+                        if (location.IsAlmostEqualTo(LineWallDir))
+                        {
+                            goto end;
+                        }
+                        else
+                        {
+                            marker.Location.Rotate(axis, (angle3 ));
+
+
+                            if (location.IsAlmostEqualTo(LineWallDir))
+                            {
+                                goto end;
+                            }
+
+                            XYZ Inverted = InvCoord(LineWallDir);
+                            if (location.IsAlmostEqualTo(Inverted))
+                            {
+                                goto end;
+                            }
+                            else
+                            {
+                                marker.Location.Rotate(axis, angle3 * -1);
+                                //double RadiansOfRotationTest2 = ElementDir.AngleTo(direction);
+                                //double AngleOfRotationTest2 = RadiansOfRotationTest2 * 180 / Math.PI;
+
+                                marker.Location.Rotate(axis, angle3 * -1    );
+                                //double RadiansOfRotationTest3 = ElementDir.AngleTo(direction);
+                                //double AngleOfRotationTest3 = RadiansOfRotationTest3 * 180 / Math.PI;
+                                goto end;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(location, XYZ.BasisZ);
+                        angle3 = location.AngleTo(DIR);
+                        if (location.IsAlmostEqualTo(DIR))
+                        {
+                            goto end;
+                        }
+                        else
+                        {
+                            marker.Location.Rotate(axis, (angle3 ));
+
+
+                            if (location.IsAlmostEqualTo(DIR))
+                            {
+                                goto end;
+                            }
+
+                            XYZ Inverted = InvCoord(DIR);
+                            if (location.IsAlmostEqualTo(Inverted))
+                            {
+                                goto end;
+                            }
+                            else
+                            {
+                                marker.Location.Rotate(axis, angle3 * -1);
+                                //double RadiansOfRotationTest2 = ElementDir.AngleTo(direction);
+                                //double AngleOfRotationTest2 = RadiansOfRotationTest2 * 180 / Math.PI;
+
+                                marker.Location.Rotate(axis, angle3 * -1);
+                                //double RadiansOfRotationTest3 = ElementDir.AngleTo(direction);
+                                //double AngleOfRotationTest3 = RadiansOfRotationTest3 * 180 / Math.PI;
+                                goto end;
+                            }
+                        }
+                    }
+                }
+
+                if (lc != null)
+                {
+
+
+                }
+            end:
+                tx.Commit();
+            }
+            return Result.Succeeded;
+        }
+    }
+
 
 
     class ribbonUI : IExternalApplication
@@ -337,13 +490,18 @@ namespace STH_Automation_22
 
             PushButton Button2 = (PushButton)panel_1.AddItem(new PushButtonData("Set Annotation Crop", "Set Annotation Crop", dll, "STH_Automation_22.Set_Annotation_Crop"));
             Button2.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGridIcon.png"), UriKind.Absolute));
-            Button2.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
-            Button2.ToolTipImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGrid.jpg"), UriKind.Absolute));
+            //Button2.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
+            //Button2.ToolTipImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGrid.jpg"), UriKind.Absolute));
 
             PushButton Button3 = (PushButton)panel_1.AddItem(new PushButtonData("Elevate wall", "Elevate wall", dll, "STH_Automation_22.Wall_Elevation"));
             Button3.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGridIcon.png"), UriKind.Absolute));
-            Button3.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
-            Button3.ToolTipImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGrid.jpg"), UriKind.Absolute));
+            //Button3.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
+            //Button3.ToolTipImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGrid.jpg"), UriKind.Absolute));
+
+            PushButton Button4 = (PushButton)panel_1.AddItem(new PushButtonData("Wall Angle To EleMarker", "Wall Angle To EleMarker", dll, "STH_Automation_22.Wall_Angle_To_EleMarker"));
+            Button4.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGridIcon.png"), UriKind.Absolute));
+            //Button4.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
+            //Button4.ToolTipImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGrid.jpg"), UriKind.Absolute));
 
             //try
             //{
