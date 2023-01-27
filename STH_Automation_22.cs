@@ -45,7 +45,6 @@ namespace STH_Automation_22
             TaskDialog.Show("!", "Select a reference Grid to find orthogonal walls");
 
             Autodesk.Revit.DB.Grid Grid_ = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Grid")) as Autodesk.Revit.DB.Grid;
-            //Autodesk.Revit.DB.Wall el = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Grid")) as Autodesk.Revit.DB.Wall;
             Element el = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select an existing group"));
             LocationCurve lc = el.Location as LocationCurve;
             Autodesk.Revit.DB.LocationPoint lp = null;
@@ -84,8 +83,6 @@ namespace STH_Automation_22
                 {
                     axis = Autodesk.Revit.DB.Line.CreateUnbound((lp.Point), XYZ.BasisZ);
                 }
-
-
 
                 XYZ ElementDir = XYZ.Zero;
 
