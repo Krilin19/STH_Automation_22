@@ -474,10 +474,6 @@ namespace STH_Automation_22
                 DirEnd = DIR * (1100 / 304.8);
             }
 
-
-           
-
-
             using (Transaction tx = new Transaction(doc))
             {
                 tx.Start("Create Wall Section View");
@@ -486,23 +482,41 @@ namespace STH_Automation_22
                     BoundingBoxXYZ vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
                     XYZ center = (vbb.Max + vbb.Min) / 2;
 
-                  
+                    XYZ norm = LineWallDir.CrossProduct(XYZ.BasisZ);
 
-                    //Autodesk.Revit.DB.Line line2 = Autodesk.Revit.DB.Line.CreateUnbound(location, XYZ.BasisY);
-                    //XYZ vect1 = line2.Direction * (1100 / 304.8);
+
+                    Autodesk.Revit.DB.Line line_ = Autodesk.Revit.DB.Line.CreateUnbound(lc.Curve.Evaluate(0.5, true), norm);
+                    XYZ vect1 = line_.Direction * (1100 / 304.8);
+                    XYZ PerpVect = vect1 + lc.Curve.Evaluate(0.5, true);
+                    ModelCurve mc = Makeline(doc, lc.Curve.Evaluate(0.5, true), PerpVect);
+                    Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateBound(lc.Curve.Evaluate(0.5, true), PerpVect);
+
+
                     XYZ vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
                     Makeline(doc, vect2, center);
-
                     Autodesk.Revit.DB.Line line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
-                    //XYZ vect1 = line2.Direction * (1100 / 304.8);
+                    
+
+                    
+                    angle3 = line2.Direction.AngleTo(line3.Direction);
+
+
+                    Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(vect2, XYZ.BasisZ);
 
                     if (lc != null)
                     {
-                        Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(vect2, XYZ.BasisZ);
-                        angle3 = line2.Direction.AngleTo(LineWallDir);
+                        
                         double AngleOfRotation = angle3 * 180 / Math.PI;
 
-                        if (line2.Direction.IsAlmostEqualTo(LineWallDir))
+                        if (AngleOfRotation > 90)
+                        {
+                            angle3 = Math.PI - angle3;
+                            AngleOfRotation = angle3 * 180 / Math.PI;
+                        }
+
+
+
+                        if (line2.Direction.IsAlmostEqualTo(line3.Direction))
                         {
                             goto end;
                         }
@@ -513,76 +527,41 @@ namespace STH_Automation_22
                             vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
                             vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
                             center = (vbb.Max + vbb.Min) / 2;
+
                             line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
-                            angle3 = line2.Direction.AngleTo(LineWallDir);
+
+                            angle3 = line2.Direction.AngleTo(line3.Direction);
                             AngleOfRotation = angle3 * 180 / Math.PI;
 
-                            if (line2.Direction.IsAlmostEqualTo(LineWallDir))
+
+                           
+
+                            if (line2.Direction.IsAlmostEqualTo(line3.Direction))
                             {
                                 goto end;
                             }
 
-                            XYZ Inverted = InvCoord(LineWallDir);
+                            //if (AngleOfRotation > 90)
+                            //{
+                            //    angle3 = Math.PI - angle3;
+                            //    AngleOfRotation = angle3 * 180 / Math.PI;
+                            //}
+
+                            XYZ Inverted = InvCoord(line3.Direction);
                             if (line2.Direction.IsAlmostEqualTo(Inverted))
                             {
+                                marker.Location.Rotate(axis, angle3 * -1);
+                                marker.Location.Rotate(axis, angle3 * -1);
                                 goto end;
                             }
                             else
                             {
                                 marker.Location.Rotate(axis, angle3 * -1);
-                                //double RadiansOfRotationTest2 = ElementDir.AngleTo(direction);
-                                //double AngleOfRotationTest2 = RadiansOfRotationTest2 * 180 / Math.PI;
-
-                                marker.Location.Rotate(axis, angle3 * -1    );
-                                //double RadiansOfRotationTest3 = ElementDir.AngleTo(direction);
-                                //double AngleOfRotationTest3 = RadiansOfRotationTest3 * 180 / Math.PI;
+                                marker.Location.Rotate(axis, angle3 * -1);;
                                 goto end;
                             }
                         }
                     }
-                    else
-                    {
-                        Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(vect2, XYZ.BasisZ);
-
-                        angle3 = line2.Direction.AngleTo(DIR);
-                        if (line2.Direction.IsAlmostEqualTo(DIR))
-                        {
-                            goto end;
-                        }
-                        else
-                        {
-                            marker.Location.Rotate(axis, (angle3 ));
-
-
-                            if (line2.Direction.IsAlmostEqualTo(DIR))
-                            {
-                                goto end;
-                            }
-
-                            XYZ Inverted = InvCoord(DIR);
-                            if (line2.Direction.IsAlmostEqualTo(Inverted))
-                            {
-                                goto end;
-                            }
-                            else
-                            {
-                                marker.Location.Rotate(axis, angle3 * -1);
-                                //double RadiansOfRotationTest2 = ElementDir.AngleTo(direction);
-                                //double AngleOfRotationTest2 = RadiansOfRotationTest2 * 180 / Math.PI;
-
-                                marker.Location.Rotate(axis, angle3 * -1);
-                                //double RadiansOfRotationTest3 = ElementDir.AngleTo(direction);
-                                //double AngleOfRotationTest3 = RadiansOfRotationTest3 * 180 / Math.PI;
-                                goto end;
-                            }
-                        }
-                    }
-                }
-
-                if (lc != null)
-                {
-
-
                 }
             end:
                 tx.Commit();
