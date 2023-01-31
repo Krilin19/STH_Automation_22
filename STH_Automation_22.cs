@@ -20,6 +20,8 @@ using System.Windows.Forms;
 using adWin = Autodesk.Windows;
 using System.Linq;
 using OfficeOpenXml.Drawing.Chart;
+using OfficeOpenXml;
+using System.Runtime.Serialization.Formatters;
 #endregion
 namespace STH_Automation_22
 {
@@ -484,6 +486,7 @@ namespace STH_Automation_22
 
                     XYZ norm = LineWallDir.CrossProduct(XYZ.BasisZ);
 
+                    XYZ InterNorm = LineWallDir.CrossProduct(XYZ.BasisZ.Negate());
 
                     Autodesk.Revit.DB.Line line_ = Autodesk.Revit.DB.Line.CreateUnbound(lc.Curve.Evaluate(0.5, true), norm);
                     XYZ vect1 = line_.Direction * (1100 / 304.8);
@@ -491,6 +494,11 @@ namespace STH_Automation_22
                     ModelCurve mc = Makeline(doc, lc.Curve.Evaluate(0.5, true), PerpVect);
                     Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateBound(lc.Curve.Evaluate(0.5, true), PerpVect);
 
+                    Autodesk.Revit.DB.Line Interline_ = Autodesk.Revit.DB.Line.CreateUnbound(lc.Curve.Evaluate(0.5, true), InterNorm);
+                    XYZ Intervect1 = Interline_.Direction * (1100 / 304.8);
+                    XYZ InterPerpVect = Intervect1 + lc.Curve.Evaluate(0.5, true);
+                    ModelCurve Intermc = Makeline(doc, lc.Curve.Evaluate(0.5, true), InterPerpVect);
+                    Autodesk.Revit.DB.Line Interline3 = Autodesk.Revit.DB.Line.CreateBound(lc.Curve.Evaluate(0.5, true), InterPerpVect);
 
                     XYZ vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
                     Makeline(doc, vect2, center);
@@ -505,17 +513,42 @@ namespace STH_Automation_22
 
                     if (lc != null)
                     {
-                        
                         double AngleOfRotation = angle3 * 180 / Math.PI;
 
-                        if (AngleOfRotation > 90)
+                        if (AngleOfRotation > 180)
+                        {
+                            double PrevAngle = angle3;
+                            marker.Location.Rotate(axis, (angle3));
+
+                            vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
+                            vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
+                            center = (vbb.Max + vbb.Min) / 2;
+
+                            line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
+
+                            angle3 = line2.Direction.AngleTo(line3.Direction);
+                            AngleOfRotation = angle3 * 180 / Math.PI;
+
+                            XYZ Inverted = InvCoord(line3.Direction);
+                            if (line2.Direction.IsAlmostEqualTo(line3.Direction) || line2.Direction.IsAlmostEqualTo(Inverted))
+                            {
+                                if (true)
+                                {
+
+                                }
+
+                                goto end;
+                            }
+                            else 
+                            {
+                                marker.Location.Rotate(axis, PrevAngle * -1);
+                            }
+                        }
+                        else
                         {
                             angle3 = Math.PI - angle3;
                             AngleOfRotation = angle3 * 180 / Math.PI;
                         }
-
-
-
                         if (line2.Direction.IsAlmostEqualTo(line3.Direction))
                         {
                             goto end;
@@ -533,31 +566,20 @@ namespace STH_Automation_22
                             angle3 = line2.Direction.AngleTo(line3.Direction);
                             AngleOfRotation = angle3 * 180 / Math.PI;
 
-
-                           
-
                             if (line2.Direction.IsAlmostEqualTo(line3.Direction))
                             {
                                 goto end;
                             }
-
-                            //if (AngleOfRotation > 90)
-                            //{
-                            //    angle3 = Math.PI - angle3;
-                            //    AngleOfRotation = angle3 * 180 / Math.PI;
-                            //}
-
                             XYZ Inverted = InvCoord(line3.Direction);
                             if (line2.Direction.IsAlmostEqualTo(Inverted))
                             {
-                                marker.Location.Rotate(axis, angle3 * -1);
                                 marker.Location.Rotate(axis, angle3 * -1);
                                 goto end;
                             }
                             else
                             {
                                 marker.Location.Rotate(axis, angle3 * -1);
-                                marker.Location.Rotate(axis, angle3 * -1);;
+                                //marker.Location.Rotate(axis, angle3 * -1);;
                                 goto end;
                             }
                         }
@@ -643,6 +665,367 @@ namespace STH_Automation_22
     }
 
 
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Sync_Manager : IExternalCommand
+    {
+        static AddInId appId = new AddInId(new Guid("6C22CC72-A167-4819-AAF1-A178F6B44BAB"));
+        static public Autodesk.Revit.ApplicationServices.Application m_app;
+        public float abort = 0;
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Document doc = uidoc.Document;
+
+            if (doc.Title == "RAC_basic_sample_project"  /*"RHR_BUILDING_A22"*/)
+            {
+                SyncListUpdater SyncListUpdater_ = new SyncListUpdater();
+                SyncListUpdater_.label3.Text = "Checking in 30 seconds";
+                SyncListUpdater_.label4.Text = "Logged on at:";
+                SyncListUpdater_.label5.Text = "Waiting list to sync";
+                string user = doc.Application.Username;
+                var lastSaveTime = DateTime.Now;
+                var CheckTime = DateTime.Now;
+                bool timerToCheck = true;
+
+            beggining:
+                string Sync_Manager = @"T:\Lopez\Sync_Manager.xlsx";
+
+                try
+                {
+                    using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+                    {
+                        ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+                    }
+                }
+                catch (Exception)
+                {
+                    MessageBox.Show("Excel Sync Manager file not found, try Sync the normal way", "Sync Warning");
+                    return Autodesk.Revit.UI.Result.Cancelled;
+                }
+                try
+                {
+                    using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+                    {
+                        ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+                        var Time_ = DateTime.Now;
+
+                        if (sheet.Cells[1, 2].Value != null)
+                        {
+                            if (sheet.Cells[1, 2].Value.ToString() == user)
+                            {
+                                goto finish_;
+                            }
+
+                        }
+                        for (int row = 1; row < 20; row++)
+                        {
+                            if (sheet.Cells[row, 1].Value == null)
+                            {
+                                break;
+                            }
+
+                            if (sheet.Cells[row, 1].Value != null)
+                            {
+                                var Value1 = sheet.Cells[row, 1].Value;
+                                var Value2 = sheet.Cells[row, 2].Value;
+                                //s += Value1 + " + " + Value2.ToString() + "\n";
+                                SyncListUpdater_.listBox1.Items.Add(Value1 + " + " + Value2.ToString() + "\n");
+                                if ((sheet.Cells[row, 1].Value == null))
+                                {
+                                    sheet.Cells[1, 1].Value = Time_.ToString();
+                                    sheet.Cells[1, 2].Value = user;
+                                }
+                            }
+
+                        }
+
+                        SyncListUpdater_.listBox1.Refresh();
+                        SyncListUpdater_.listBox1.Update();
+                        SyncListUpdater_.Show();
+                        SyncListUpdater_.label2.Text = lastSaveTime.ToString();
+                        SyncListUpdater_.label2.Refresh();
+                        SyncListUpdater_.label2.Update();
+                        SyncListUpdater_.label3.Update();
+                        SyncListUpdater_.label4.Update();
+                        SyncListUpdater_.label5.Update();
+
+                    //TaskDialog.Show("Current Sync List ", s);
+                    //MessageBox.Show("Current Sync List ", "");
+                    nonvalue:
+                        //---------------------------------------------------------
+                        try
+                        {
+                            if (sheet.Cells[1, 1].Value == null)
+                            {
+                                sheet.Cells[1, 1].Value = Time_.ToString();
+                                sheet.Cells[1, 2].Value = user;
+                                SyncListUpdater_.listBox1.Refresh();
+                                SyncListUpdater_.listBox1.Update();
+                                package.Save();
+                                goto finish_;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            goto nonvalue;
+                        }
+
+                        //---------------------------------------------------------
+                        if (sheet.Cells[1, 2].Value.ToString() != null)
+                        {
+                            for (int row = 1; row < 9999; row++)
+                            {
+                                var thisValue = sheet.Cells[row, 2].Value;
+                                if (thisValue != null)
+                                {
+                                    if (thisValue.ToString() == user)
+                                    {
+                                        sheet.DeleteRow(row, 2);
+                                        //goto finder;
+                                    }
+                                }
+
+                            }
+                        }
+                        if (sheet.Cells[1, 2].Value.ToString() != null)
+                        {
+                            for (int row = 1; row < 9999; row++)
+                            {
+                                var thisValue = sheet.Cells[row, 1].Value;
+                                if (thisValue == null)
+                                {
+                                    sheet.Cells[row, 1].Value = Time_.ToString();
+                                    sheet.Cells[row, 2].Value = user;
+                                    package.Save();
+                                    goto finder;
+                                }
+                                else
+                                {
+                                }
+                            }
+                        }
+                    }
+
+                }
+                catch (Exception)
+                {
+                    //MessageBox.Show("Excel file not found", "");
+                    //return;
+                    goto beggining;
+                }
+
+                try
+                {
+                    SyncListUpdater_.listBox1.Items.Clear();
+                    using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+                    {
+                        ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+
+                        for (int row = 1; row < 20; row++)
+                        {
+                            if (sheet.Cells[row, 1].Value == null)
+                            {
+                                break;
+                            }
+                            if (sheet.Cells[row, 1].Value != null)
+                            {
+                                var Value1 = sheet.Cells[row, 1].Value;
+                                var Value2 = sheet.Cells[row, 2].Value;
+
+                                if (lastSaveTime == DateTime.MinValue)
+                                {
+                                    lastSaveTime = DateTime.Now;
+                                }
+                                DateTime now = DateTime.Now;
+                                TimeSpan elapsedTime = now.Subtract(lastSaveTime);
+                                double minutes = elapsedTime.Minutes;
+                                if (minutes > 2)
+                                {
+                                    SyncListUpdater_.Close();
+                                    MessageBox.Show("10 minutes have passed, try to sync again", "Warning");
+                                    return Autodesk.Revit.UI.Result.Cancelled;
+                                }
+
+                                SyncListUpdater_.listBox1.Items.Add(Value1 + " + " + Value2.ToString());
+
+                                SyncListUpdater_.label1.Text = elapsedTime.ToString();
+
+                                SyncListUpdater_.label1.Refresh();
+                                SyncListUpdater_.label1.Update();
+
+                            }
+
+                        }
+
+                        if (sheet.Cells[1, 1].Value != null && sheet.Cells[1, 2].Value.ToString() != user)
+                        {
+                            package.Save();
+                            package.Dispose();
+                            SyncListUpdater_.listBox1.Refresh();
+                            SyncListUpdater_.listBox1.Update();
+                            goto finder;
+                        }
+                        else
+                        {
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    //goto finder;
+                }
+
+            finder:
+
+                if (SyncListUpdater_.DialogResult == DialogResult.Cancel)
+                {
+                    return Autodesk.Revit.UI.Result.Cancelled;
+                }
+
+                SyncListUpdater_.listBox1.Refresh();
+                SyncListUpdater_.listBox1.Update();
+                while (true)
+                {
+
+                    if (CheckTime == DateTime.MinValue)
+                    {
+                        CheckTime = DateTime.Now;
+                    }
+                    DateTime nowTocheck = DateTime.Now;
+
+                    TimeSpan elapsedTimeToCheck = nowTocheck.Subtract(CheckTime);
+                    double minutestoCheck = elapsedTimeToCheck.TotalSeconds;
+
+
+                    SyncListUpdater_.label1.Text = elapsedTimeToCheck.ToString();
+
+                    SyncListUpdater_.label1.Refresh();
+                    SyncListUpdater_.label1.Update();
+
+                    if (minutestoCheck > 30.0)
+                    {
+                        CheckTime = DateTime.Now;
+                        try
+                        {
+                            using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+                            {
+                                ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+
+                                SyncListUpdater_.listBox1.Items.Clear();
+
+                                for (int row = 1; row < 20; row++)
+                                {
+                                    if (sheet.Cells[row, 1].Value == null)
+                                    {
+                                        break;
+                                    }
+                                    if (sheet.Cells[row, 1].Value != null)
+                                    {
+                                        var Value1 = sheet.Cells[row, 1].Value;
+                                        var Value2 = sheet.Cells[row, 2].Value;
+
+                                        if (lastSaveTime == DateTime.MinValue)
+                                        {
+                                            lastSaveTime = DateTime.Now;
+                                        }
+                                        DateTime now = DateTime.Now;
+                                        TimeSpan elapsedTime = now.Subtract(lastSaveTime);
+                                        double minutes = elapsedTime.Minutes;
+                                        if (minutes > 10)
+                                        {
+                                            SyncListUpdater_.Close();
+                                            MessageBox.Show("10 minutes have passed", "Warning");
+                                            return Autodesk.Revit.UI.Result.Cancelled;
+                                        }
+
+                                        SyncListUpdater_.listBox1.Items.Add(Value1 + " + " + Value2.ToString());
+                                        //SyncListUpdater_.textBox1.Text = minutestoCheck.ToString() /*DateTime.Now.ToShortTimeString()*/;
+                                        SyncListUpdater_.label1.Text = elapsedTime.ToString();
+                                        //SyncListUpdater_.textBox1.Refresh();
+                                        //SyncListUpdater_.textBox1.Update();
+                                        SyncListUpdater_.label1.Refresh();
+                                        SyncListUpdater_.label1.Update();
+
+                                    }
+
+                                }
+
+                                if (sheet.Cells[1, 1].Value != null && sheet.Cells[1, 2].Value.ToString() != user)
+                                {
+                                    package.Save();
+                                    package.Dispose();
+                                    SyncListUpdater_.listBox1.Refresh();
+                                    SyncListUpdater_.listBox1.Update();
+                                    goto finder;
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            //SyncListUpdater_.textBox1.Text = time.ToString("hh':'mm':'ss") /*time.ToString()*/;
+                            //SyncListUpdater_.listBox1.Refresh();
+                            //SyncListUpdater_.listBox1.Update();
+                            goto finder;
+                        }
+                    }
+                }
+
+            //for (int i = 0; i < reset; i++)
+            //{
+
+
+            //    if (i == 99999998)
+            //    {
+
+            //    }
+            //}
+            finish_:;
+                SyncListUpdater_.Close();
+
+                TransactWithCentralOptions transact = new TransactWithCentralOptions();
+                SynchronizeWithCentralOptions synch = new SynchronizeWithCentralOptions();
+                //synch.Comment = "Autosaved by the API at " + DateTime.Now;
+                RelinquishOptions relinquishOptions = new RelinquishOptions(true);
+                relinquishOptions.CheckedOutElements = true;
+                synch.SetRelinquishOptions(relinquishOptions);
+
+                //uiApp.Application.WriteJournalComment("AutoSave To Central", true);
+                doc.SynchronizeWithCentral(transact, synch);
+
+                try
+                {
+                    using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+                    {
+                        ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+                        if (sheet.Cells[1, 2].Value != null)
+                        {
+                            if (sheet.Cells[1, 2].Value.ToString() == user)
+                            {
+                                sheet.DeleteRow(1, 1);
+                                package.Save();
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    //MessageBox.Show("Excel file not found", "");
+                    //return;
+                }
+                return Autodesk.Revit.UI.Result.Succeeded;
+            }
+            else
+            {
+                TaskDialog.Show(doc.PathName.ToString(), "This tool is active only for =" + "RHR_BUILDING_A22");
+                return Autodesk.Revit.UI.Result.Cancelled;
+            }
+
+        }
+    }
     class ribbonUI : IExternalApplication
     {
         public static FailureDefinitionId failureDefinitionId = new FailureDefinitionId(new Guid("E7BC1F65-781D-48E8-AF37-1136B62913F5"));
@@ -651,7 +1034,7 @@ namespace STH_Automation_22
             string appdataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             string folderPath = System.IO.Path.Combine(appdataFolder, @"Autodesk\Revit\Addins\2022\STH_Automation_22\img");
             string dll = Assembly.GetExecutingAssembly().Location;
-            string myRibbon_1 = "Modelling Tools";
+            string myRibbon_1 = "Test Tools";
 
             application.CreateRibbonTab(myRibbon_1);
             RibbonPanel panel_1 = application.CreateRibbonPanel(myRibbon_1, "STH");
@@ -662,20 +1045,23 @@ namespace STH_Automation_22
             Button1.ToolTipImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGrid.jpg"), UriKind.Absolute));
 
             PushButton Button2 = (PushButton)panel_1.AddItem(new PushButtonData("Set Annotation Crop", "Set Annotation Crop", dll, "STH_Automation_22.Set_Annotation_Crop"));
-            Button2.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGridIcon.png"), UriKind.Absolute));
-            //Button2.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
+            Button2.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "SetCropbox.png"), UriKind.Absolute));
+           
 
             PushButton Button3 = (PushButton)panel_1.AddItem(new PushButtonData("Elevate wall", "Elevate wall", dll, "STH_Automation_22.Wall_Elevation"));
-            Button3.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGridIcon.png"), UriKind.Absolute));
-            //Button3.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
+            Button3.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "ElevateWall.png"), UriKind.Absolute));
+
 
             PushButton Button4 = (PushButton)panel_1.AddItem(new PushButtonData("Wall Angle To EleMarker", "Wall Angle To EleMarker", dll, "STH_Automation_22.Wall_Angle_To_EleMarker"));
-            Button4.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "RotateEle.png"), UriKind.Absolute));
-            //Button4.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
+            Button4.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "ElevateWall.png"), UriKind.Absolute));
+
 
             PushButton Button5 = (PushButton)panel_1.AddItem(new PushButtonData("Find Perpendicular Wall", "Find Perpendicular Wall", dll, "STH_Automation_22.Find_Perpendicular_Wall"));
             Button5.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "AlignToGridIcon.png"), UriKind.Absolute));
-            //Button4.LongDescription = "This tool helps to make parallel any line base element or family to a selected grid angle";
+           
+
+            PushButton Button6 = (PushButton)panel_1.AddItem(new PushButtonData("Sync Manager", "Sync Manager", dll, "STH_Automation_22.Sync_Manager"));
+            Button6.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "sync.png"), UriKind.Absolute));
 
             return Autodesk.Revit.UI.Result.Succeeded;
         }

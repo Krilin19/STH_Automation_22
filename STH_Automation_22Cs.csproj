@@ -57,9 +57,23 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="SyncListUpdater.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="SyncListUpdater.Designer.cs">
+      <DependentUpon>SyncListUpdater.cs</DependentUpon>
+    </Compile>
     <Compile Include="STH_Automation_22.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -68,6 +82,15 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="STH_Automation_22.addin" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Include="SyncListUpdater.resx">
+      <DependentUpon>SyncListUpdater.cs</DependentUpon>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

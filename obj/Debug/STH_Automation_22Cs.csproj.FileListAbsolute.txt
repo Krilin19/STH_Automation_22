@@ -14,3 +14,6 @@ C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22Cs
 C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22Cs.csproj.CopyComplete
 C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22.dll
 C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22.pdb
+C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22.SyncListUpdater.resources
+C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22Cs.csproj.GenerateResource.cache
+C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22.Properties.Resources.resources
