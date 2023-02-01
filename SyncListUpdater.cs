@@ -45,9 +45,10 @@ namespace STH_Automation_22
 
         private void button2_Click(object sender, EventArgs e)
         {
-            
+            listBox1.Items.Clear();
+
+
             string Sync_Manager = @"T:\Lopez\Sync_Manager.xlsx";
-            SyncListUpdater SyncListUpdater_ = new SyncListUpdater();
             
             try
             {
@@ -79,7 +80,7 @@ namespace STH_Automation_22
                         var Value1 = sheet.Cells[row, 1].Value;
                         var Value2 = sheet.Cells[row, 2].Value;
                         //s += Value1 + " + " + Value2.ToString() + "\n";
-                        SyncListUpdater_.listBox1.Items.Add(Value1 + " + " + Value2.ToString() + "\n");
+                        listBox1.Items.Add(Value1 + " + " + Value2.ToString() + "\n");
 
                     }
 
@@ -87,8 +88,8 @@ namespace STH_Automation_22
                 package.Save();
             }
             
-            SyncListUpdater_.listBox1.Update();
-            SyncListUpdater_.listBox1.Refresh();
+            listBox1.Update();
+            listBox1.Refresh();
         }
 
         private void button3_Click(object sender, EventArgs e)
