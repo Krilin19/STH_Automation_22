@@ -202,7 +202,7 @@ namespace STH_Automation_22
     }
 
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class Wall_Elevation : IExternalCommand
+    public class Wall_Elevation_A : IExternalCommand
     {
         public static ModelLine Makeline(Autodesk.Revit.DB.Document doc, XYZ pta, XYZ ptb)
         {
@@ -318,6 +318,123 @@ namespace STH_Automation_22
             return Result.Succeeded;
         }
     }
+
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Wall_Elevation_B : IExternalCommand
+    {
+        public static ModelLine Makeline(Autodesk.Revit.DB.Document doc, XYZ pta, XYZ ptb)
+        {
+            ModelLine modelLine = null;
+            double distance = pta.DistanceTo(ptb);
+            if (distance < 0.01)
+            {
+                TaskDialog.Show("Error", "Distance" + distance);
+                return modelLine;
+            }
+
+            XYZ norm = pta.CrossProduct(ptb);
+            if (norm.GetLength() == 0)
+            {
+                XYZ aSubB = pta.Subtract(ptb);
+                XYZ aSubBcrossz = aSubB.CrossProduct(XYZ.BasisZ);
+                double crosslenght = aSubBcrossz.GetLength();
+                if (crosslenght == 0)
+                {
+                    norm = XYZ.BasisY;
+                }
+                else
+                {
+                    norm = XYZ.BasisZ;
+                }
+            }
+
+            Autodesk.Revit.DB.Plane plane = Autodesk.Revit.DB.Plane.CreateByNormalAndOrigin(norm, ptb);
+            SketchPlane skplane = SketchPlane.Create(doc, plane);
+            Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(pta, ptb);
+
+            if (doc.IsFamilyDocument)
+            {
+                modelLine = doc.FamilyCreate.NewModelCurve(line, skplane) as ModelLine;
+            }
+            else
+            {
+                modelLine = doc.Create.NewModelCurve(line, skplane) as ModelLine;
+            }
+            if (modelLine == null)
+            {
+                TaskDialog.Show("Error", "Model line = null");
+            }
+            return modelLine;
+        }
+
+        static AddInId appId = new AddInId(new Guid("5F88CC78-A137-4809-AAF8-A478F3B24BAB"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIApplication uiapp = commandData.Application;
+            UIDocument uidoc = uiapp.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+            ViewFamilyType vftele = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Elevation == x.ViewFamily);
+
+            ICollection<ElementId> ids = uidoc.Selection.GetElementIds();
+            Wall wall = null;
+            foreach (ElementId id in ids)
+            {
+                Element e = doc.GetElement(id);
+                wall = e as Wall;
+                LocationCurve lc = wall.Location as LocationCurve;
+
+                Autodesk.Revit.DB.Line line = lc.Curve as Autodesk.Revit.DB.Line;
+                if (null == line)
+                {
+                    message = "Unable to retrieve wall location line.";
+
+                    return Result.Failed;
+                }
+
+                XYZ pntCenter = line.Evaluate(0.5, true);
+                XYZ normal = line.Direction.Normalize();
+                XYZ dir = new XYZ(0, 0, 1);
+                XYZ cross = normal.CrossProduct(dir );
+                XYZ pntEnd = pntCenter + cross.Multiply(2);
+                XYZ poscross = normal.CrossProduct(dir);
+                XYZ pospntEnd = pntCenter + poscross.Multiply(2);
+
+                XYZ vect1 = line.Direction * (-1100 / 304.8);
+                vect1 = vect1.Negate();
+                XYZ vect2 = vect1 + line.Evaluate(0.5, true);
+
+                Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateBound(line.Evaluate(0.5, true), vect2);
+                Autodesk.Revit.DB.Line line2 = Autodesk.Revit.DB.Line.CreateBound(pntCenter, pospntEnd);
+
+                double angle4 = XYZ.BasisY.AngleTo(line2.Direction);
+                double angleDegrees4 = angle4 * 180 / Math.PI;
+                if (pntCenter.X < line2.GetEndPoint(1).X)
+                {
+                    angle4 = 2 * Math.PI - angle4;
+                }
+                double angleDegreesCorrected4 = angle4 * 180 / Math.PI;
+                Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(pntEnd, XYZ.BasisZ);
+
+                using (Transaction tx = new Transaction(doc))
+                {
+                    tx.Start("Create Wall Section View");
+                    ElevationMarker marker = ElevationMarker.CreateElevationMarker(doc, vftele.Id, pntEnd/*line.Evaluate(0.5,true)*/, 100);
+                    ViewSection elevation1 = marker.CreateElevation(doc, doc.ActiveView.Id, 1);
+
+                    if (angleDegreesCorrected4 > 160 && angleDegreesCorrected4 < 200)
+                    {
+                        angle4 = angle4 / 2;
+                        marker.Location.Rotate(axis, angle4 );
+                    }
+                    marker.Location.Rotate(axis, angle4 );
+                    tx.Commit();
+                }
+            }
+            return Result.Succeeded;
+        }
+    }
+
 
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class Wall_Angle_To_EleMarker : IExternalCommand
@@ -456,12 +573,10 @@ namespace STH_Automation_22
                 .Where(v1 => v1.Name == ViewSection_.Name)
                 .ToList();
 
-
             Autodesk.Revit.DB.LocationPoint lp = null;
             ElevationMarker marker = el2 as ElevationMarker;
             LocationCurve lc = el.Location as LocationCurve;
             
-           
             if (lc != null)
             {
                 LineWallDir = (lc.Curve as Autodesk.Revit.DB.Line).Direction;
@@ -476,118 +591,182 @@ namespace STH_Automation_22
                 DirEnd = DIR * (1100 / 304.8);
             }
 
+
+            XYZ pntCenter = lc.Curve.Evaluate(0.5, true);
+            XYZ normal = (lc.Curve as Autodesk.Revit.DB.Line).Direction;
+
+            XYZ cross = normal.CrossProduct(XYZ.BasisZ * -1);
+            XYZ pntEnd = pntCenter + cross.Multiply(2);
+            XYZ poscross = normal.CrossProduct(XYZ.BasisZ);
+            XYZ pospntEnd = pntCenter + poscross.Multiply(2);
+
+            XYZ vect1 = (lc.Curve as Autodesk.Revit.DB.Line).Direction * (-1100 / 304.8);
+            vect1 = vect1.Negate();
+            XYZ vect2 = vect1 + lc.Curve.Evaluate(0.5, true);
+
+            Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateBound(lc.Curve.Evaluate(0.5, true), vect2);
+            Autodesk.Revit.DB.Line line2 = Autodesk.Revit.DB.Line.CreateBound(pntCenter, pospntEnd);
+            //Makeline(doc, pntCenter, vect2);
+
+            double angle4 = XYZ.BasisY.AngleTo(line2.Direction);
+            double angleDegrees4 = angle4 * 180 / Math.PI;
+            if (pntCenter.X < line2.GetEndPoint(1).X)
+            {
+                angle4 = 2 * Math.PI - angle4;
+            }
+            double angleDegreesCorrected4 = angle4 * 180 / Math.PI;
+            
+
+            
+            XYZ CentreEleMarker = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
+            BoundingBoxXYZ vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
+            XYZ center = (vbb.Max + vbb.Min) / 2;
+            Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(center, XYZ.BasisZ);
+
+            Autodesk.Revit.DB.Line EleMarkLine = Autodesk.Revit.DB.Line.CreateBound(CentreEleMarker, center);
+            double EleMarkLineAgleToY  = XYZ.BasisY.AngleTo(EleMarkLine.Direction);
+            double EleMarkLineAgleToYDegrees = EleMarkLineAgleToY * 180 / Math.PI;
+           
+
             using (Transaction tx = new Transaction(doc))
             {
                 tx.Start("Create Wall Section View");
-                if (marker != null)
+
+                if (EleMarkLine.Direction.X > 0)
                 {
-                    BoundingBoxXYZ vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
-                    XYZ center = (vbb.Max + vbb.Min) / 2;
-
-                    XYZ norm = LineWallDir.CrossProduct(XYZ.BasisZ);
-
-                    XYZ InterNorm = LineWallDir.CrossProduct(XYZ.BasisZ.Negate());
-
-                    Autodesk.Revit.DB.Line line_ = Autodesk.Revit.DB.Line.CreateUnbound(lc.Curve.Evaluate(0.5, true), norm);
-                    XYZ vect1 = line_.Direction * (1100 / 304.8);
-                    XYZ PerpVect = vect1 + lc.Curve.Evaluate(0.5, true);
-                    ModelCurve mc = Makeline(doc, lc.Curve.Evaluate(0.5, true), PerpVect);
-                    Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateBound(lc.Curve.Evaluate(0.5, true), PerpVect);
-
-                    Autodesk.Revit.DB.Line Interline_ = Autodesk.Revit.DB.Line.CreateUnbound(lc.Curve.Evaluate(0.5, true), InterNorm);
-                    XYZ Intervect1 = Interline_.Direction * (1100 / 304.8);
-                    XYZ InterPerpVect = Intervect1 + lc.Curve.Evaluate(0.5, true);
-                    ModelCurve Intermc = Makeline(doc, lc.Curve.Evaluate(0.5, true), InterPerpVect);
-                    Autodesk.Revit.DB.Line Interline3 = Autodesk.Revit.DB.Line.CreateBound(lc.Curve.Evaluate(0.5, true), InterPerpVect);
-
-                    XYZ vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
-                    Makeline(doc, vect2, center);
-                    Autodesk.Revit.DB.Line line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
-                    
-
-                    
-                    angle3 = line2.Direction.AngleTo(line3.Direction);
-
-
-                    Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(vect2, XYZ.BasisZ);
-
-                    if (lc != null)
-                    {
-                        double AngleOfRotation = angle3 * 180 / Math.PI;
-
-                        if (AngleOfRotation > 180)
-                        {
-                            double PrevAngle = angle3;
-                            marker.Location.Rotate(axis, (angle3));
-
-                            vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
-                            vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
-                            center = (vbb.Max + vbb.Min) / 2;
-
-                            line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
-
-                            angle3 = line2.Direction.AngleTo(line3.Direction);
-                            AngleOfRotation = angle3 * 180 / Math.PI;
-
-                            XYZ Inverted = InvCoord(line3.Direction);
-                            if (line2.Direction.IsAlmostEqualTo(line3.Direction) || line2.Direction.IsAlmostEqualTo(Inverted))
-                            {
-                                if (true)
-                                {
-
-                                }
-
-                                goto end;
-                            }
-                            else 
-                            {
-                                marker.Location.Rotate(axis, PrevAngle * -1);
-                            }
-                        }
-                        else
-                        {
-                            angle3 = Math.PI - angle3;
-                            AngleOfRotation = angle3 * 180 / Math.PI;
-                        }
-                        if (line2.Direction.IsAlmostEqualTo(line3.Direction))
-                        {
-                            goto end;
-                        }
-                        else
-                        {
-                            marker.Location.Rotate(axis, (angle3 ));
-
-                            vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
-                            vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
-                            center = (vbb.Max + vbb.Min) / 2;
-
-                            line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
-
-                            angle3 = line2.Direction.AngleTo(line3.Direction);
-                            AngleOfRotation = angle3 * 180 / Math.PI;
-
-                            if (line2.Direction.IsAlmostEqualTo(line3.Direction))
-                            {
-                                goto end;
-                            }
-                            XYZ Inverted = InvCoord(line3.Direction);
-                            if (line2.Direction.IsAlmostEqualTo(Inverted))
-                            {
-                                marker.Location.Rotate(axis, angle3 * -1);
-                                goto end;
-                            }
-                            else
-                            {
-                                marker.Location.Rotate(axis, angle3 * -1);
-                                //marker.Location.Rotate(axis, angle3 * -1);;
-                                goto end;
-                            }
-                        }
-                    }
+                    marker.Location.Rotate(axis, EleMarkLineAgleToY);
                 }
-            end:
+                else
+                {
+                    marker.Location.Rotate(axis, EleMarkLineAgleToY * -1);
+                }
+                if (!line2.Direction.IsAlmostEqualTo(line3.Direction))
+                {
+
+                }
+
+                if (angleDegreesCorrected4 > 160 && angleDegreesCorrected4 < 200)
+                {
+                    angle4 = angle4 / 2;
+
+                    marker.Location.Rotate(axis, angle4);
+                }
+                marker.Location.Rotate(axis, angle4);
                 tx.Commit();
             }
+
+
+
+            //using (Transaction tx = new Transaction(doc))
+            //{
+            //    tx.Start("Create Wall Section View");
+            //    if (marker != null)
+            //    {
+            //        BoundingBoxXYZ vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
+            //        XYZ center = (vbb.Max + vbb.Min) / 2;
+
+            //        XYZ norm = LineWallDir.CrossProduct(XYZ.BasisZ);
+
+            //        XYZ InterNorm = LineWallDir.CrossProduct(XYZ.BasisZ.Negate());
+
+            //        Autodesk.Revit.DB.Line line_ = Autodesk.Revit.DB.Line.CreateUnbound(lc.Curve.Evaluate(0.5, true), norm);
+            //        XYZ vect1 = line_.Direction * (1100 / 304.8);
+            //        XYZ PerpVect = vect1 + lc.Curve.Evaluate(0.5, true);
+            //        ModelCurve mc = Makeline(doc, lc.Curve.Evaluate(0.5, true), PerpVect);
+            //        Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateBound(lc.Curve.Evaluate(0.5, true), PerpVect);
+
+            //        Autodesk.Revit.DB.Line Interline_ = Autodesk.Revit.DB.Line.CreateUnbound(lc.Curve.Evaluate(0.5, true), InterNorm);
+            //        XYZ Intervect1 = Interline_.Direction * (1100 / 304.8);
+            //        XYZ InterPerpVect = Intervect1 + lc.Curve.Evaluate(0.5, true);
+            //        ModelCurve Intermc = Makeline(doc, lc.Curve.Evaluate(0.5, true), InterPerpVect);
+            //        Autodesk.Revit.DB.Line Interline3 = Autodesk.Revit.DB.Line.CreateBound(lc.Curve.Evaluate(0.5, true), InterPerpVect);
+
+            //        XYZ vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
+            //        Makeline(doc, vect2, center);
+            //        Autodesk.Revit.DB.Line line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
+                    
+            //        angle3 = line2.Direction.AngleTo(line3.Direction);
+
+
+            //        Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(vect2, XYZ.BasisZ);
+
+            //        if (lc != null)
+            //        {
+            //            double AngleOfRotation = angle3 * 180 / Math.PI;
+
+            //            if (AngleOfRotation > 180)
+            //            {
+            //                double PrevAngle = angle3;
+            //                marker.Location.Rotate(axis, (angle3));
+
+            //                vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
+            //                vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
+            //                center = (vbb.Max + vbb.Min) / 2;
+
+            //                line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
+
+            //                angle3 = line2.Direction.AngleTo(line3.Direction);
+            //                AngleOfRotation = angle3 * 180 / Math.PI;
+
+            //                XYZ Inverted = InvCoord(line3.Direction);
+            //                if (line2.Direction.IsAlmostEqualTo(line3.Direction) || line2.Direction.IsAlmostEqualTo(Inverted))
+            //                {
+            //                    if (true)
+            //                    {
+
+            //                    }
+
+            //                    goto end;
+            //                }
+            //                else 
+            //                {
+            //                    marker.Location.Rotate(axis, PrevAngle * -1);
+            //                }
+            //            }
+            //            else
+            //            {
+            //                angle3 = Math.PI - angle3;
+            //                AngleOfRotation = angle3 * 180 / Math.PI;
+            //            }
+            //            if (line2.Direction.IsAlmostEqualTo(line3.Direction))
+            //            {
+            //                goto end;
+            //            }
+            //            else
+            //            {
+            //                marker.Location.Rotate(axis, (angle3 ));
+
+            //                vect2 = GetElevationMarkerCenter(doc, doc.ActiveView, marker, views.ToArray()[0] as ViewSection);
+            //                vbb = ViewSection_.get_BoundingBox(doc.ActiveView);
+            //                center = (vbb.Max + vbb.Min) / 2;
+
+            //                line2 = Autodesk.Revit.DB.Line.CreateBound(vect2, center);
+
+            //                angle3 = line2.Direction.AngleTo(line3.Direction);
+            //                AngleOfRotation = angle3 * 180 / Math.PI;
+
+            //                if (line2.Direction.IsAlmostEqualTo(line3.Direction))
+            //                {
+            //                    goto end;
+            //                }
+            //                XYZ Inverted = InvCoord(line3.Direction);
+            //                if (line2.Direction.IsAlmostEqualTo(Inverted))
+            //                {
+            //                    marker.Location.Rotate(axis, angle3 * -1);
+            //                    goto end;
+            //                }
+            //                else
+            //                {
+            //                    marker.Location.Rotate(axis, angle3 * -1);
+            //                    //marker.Location.Rotate(axis, angle3 * -1);;
+            //                    goto end;
+            //                }
+            //            }
+            //        }
+            //    }
+            //end:
+            //    tx.Commit();
+            //}
             return Result.Succeeded;
         }
     }
@@ -675,17 +854,21 @@ namespace STH_Automation_22
         {
             UIDocument uidoc = commandData.Application.ActiveUIDocument;
             Document doc = uidoc.Document;
+            SyncListUpdater SyncListUpdater_ = new SyncListUpdater();
+            SyncListUpdater_.label3.Text = "Checking in 30 seconds";
+            SyncListUpdater_.label4.Text = "Logged on at:";
+            SyncListUpdater_.label5.Text = "Waiting list to sync";
+
+            SyncListUpdater_.ShowDialog();
+            
 
             if (doc.Title == "RAC_basic_sample_project"  /*"RHR_BUILDING_A22"*/)
             {
-                SyncListUpdater SyncListUpdater_ = new SyncListUpdater();
-                SyncListUpdater_.label3.Text = "Checking in 30 seconds";
-                SyncListUpdater_.label4.Text = "Logged on at:";
-                SyncListUpdater_.label5.Text = "Waiting list to sync";
+               
                 string user = doc.Application.Username;
                 var lastSaveTime = DateTime.Now;
                 var CheckTime = DateTime.Now;
-                bool timerToCheck = true;
+               
 
             beggining:
                 string Sync_Manager = @"T:\Lopez\Sync_Manager.xlsx";
@@ -699,7 +882,8 @@ namespace STH_Automation_22
                 }
                 catch (Exception)
                 {
-                    MessageBox.Show("Excel Sync Manager file not found, try Sync the normal way", "Sync Warning");
+                    //MessageBox.Show("Excel Sync Manager file not found, try Sync the normal way", "Sync Warning");
+                    MessageBox.Show("Another user is using the Excel Sync Manager file, Try again" ,"Sync Warning");
                     return Autodesk.Revit.UI.Result.Cancelled;
                 }
                 try
@@ -902,7 +1086,7 @@ namespace STH_Automation_22
                     SyncListUpdater_.label1.Refresh();
                     SyncListUpdater_.label1.Update();
 
-                    if (minutestoCheck > 30.0)
+                    if (minutestoCheck > 10.0)
                     {
                         CheckTime = DateTime.Now;
                         try
@@ -1048,9 +1232,11 @@ namespace STH_Automation_22
             Button2.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "SetCropbox.png"), UriKind.Absolute));
            
 
-            PushButton Button3 = (PushButton)panel_1.AddItem(new PushButtonData("Elevate wall", "Elevate wall", dll, "STH_Automation_22.Wall_Elevation"));
-            Button3.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "ElevateWall.png"), UriKind.Absolute));
+            PushButton Button3_A = (PushButton)panel_1.AddItem(new PushButtonData("Elevate wall A", "Elevate wall A", dll, "STH_Automation_22.Wall_Elevation_A"));
+            Button3_A.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "ElevateWall.png"), UriKind.Absolute));
 
+            PushButton Button3_B = (PushButton)panel_1.AddItem(new PushButtonData("Elevate wall B", "Elevate wall B", dll, "STH_Automation_22.Wall_Elevation_B"));
+            Button3_B.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "ElevateWall.png"), UriKind.Absolute));
 
             PushButton Button4 = (PushButton)panel_1.AddItem(new PushButtonData("Wall Angle To EleMarker", "Wall Angle To EleMarker", dll, "STH_Automation_22.Wall_Angle_To_EleMarker"));
             Button4.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "ElevateWall.png"), UriKind.Absolute));
