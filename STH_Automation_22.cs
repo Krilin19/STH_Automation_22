@@ -22,6 +22,12 @@ using System.Linq;
 using OfficeOpenXml.Drawing.Chart;
 using OfficeOpenXml;
 using System.Runtime.Serialization.Formatters;
+using Autodesk.Revit.Creation;
+using System.Windows;
+using System.Windows.Media.Media3D;
+using Document = Autodesk.Revit.Creation.Document;
+using System.Data.Common;
+using System.Net;
 #endregion
 namespace STH_Automation_22
 {
@@ -161,7 +167,7 @@ namespace STH_Automation_22
         public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
         {
             UIDocument uidoc = commandData.Application.ActiveUIDocument;
-            Document doc = uidoc.Document;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
 
             // Get selected elements from current document.;
             ICollection<ElementId> selectedIds = uidoc.Selection.GetElementIds();
@@ -440,7 +446,7 @@ namespace STH_Automation_22
     public class Wall_Angle_To_EleMarker : IExternalCommand
     {
 
-        public XYZ GetElevationMarkerCenter(Document doc, Autodesk.Revit.DB.View symbolView, ElevationMarker marker, ViewSection elevation)
+        public XYZ GetElevationMarkerCenter(Autodesk.Revit.DB.Document doc, Autodesk.Revit.DB.View symbolView, ElevationMarker marker, ViewSection elevation)
         {
             // 1/4" elevation marker radius.
             double elevationMarkerRadius = .02083333;
@@ -471,7 +477,7 @@ namespace STH_Automation_22
             }
             return center;
         }
-        private bool IsViewerInMarker(Document doc, ElevationMarker marker, Element viewer)
+        private bool IsViewerInMarker(Autodesk.Revit.DB.Document doc, ElevationMarker marker, Element viewer)
         {
             for (int i = 0; i < 4; i++)
             {
@@ -843,6 +849,231 @@ namespace STH_Automation_22
         }
     }
 
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Export_View_Details : IExternalCommand
+    {
+        public XYZ InvCoord(XYZ MyCoord)
+        {
+            XYZ invcoord = new XYZ((Convert.ToDouble(MyCoord.X * -1)),
+                (Convert.ToDouble(MyCoord.Y * -1)),
+                (Convert.ToDouble(MyCoord.Z * -1)));
+            return invcoord;
+        }
+        public static ModelLine Makeline(Autodesk.Revit.DB.Document doc, XYZ pta, XYZ ptb)
+        {
+            ModelLine modelLine = null;
+            double distance = pta.DistanceTo(ptb);
+            if (distance < 0.01)
+            {
+                TaskDialog.Show("Error", "Distance" + distance);
+                return modelLine;
+            }
+
+            XYZ norm = pta.CrossProduct(ptb);
+            if (norm.GetLength() == 0)
+            {
+                XYZ aSubB = pta.Subtract(ptb);
+                XYZ aSubBcrossz = aSubB.CrossProduct(XYZ.BasisZ);
+                double crosslenght = aSubBcrossz.GetLength();
+                if (crosslenght == 0)
+                {
+                    norm = XYZ.BasisY;
+                }
+                else
+                {
+                    norm = XYZ.BasisZ;
+                }
+            }
+
+            Autodesk.Revit.DB.Plane plane = Autodesk.Revit.DB.Plane.CreateByNormalAndOrigin(norm, ptb);
+            SketchPlane skplane = SketchPlane.Create(doc, plane);
+            Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(pta, ptb);
+
+            if (doc.IsFamilyDocument)
+            {
+                modelLine = doc.FamilyCreate.NewModelCurve(line, skplane) as ModelLine;
+            }
+            else
+            {
+                modelLine = doc.Create.NewModelCurve(line, skplane) as ModelLine;
+            }
+            if (modelLine == null)
+            {
+                TaskDialog.Show("Error", "Model line = null");
+            }
+            return modelLine;
+        }
+
+
+        static AddInId appId = new AddInId(new Guid("5F46AA78-A136-6509-AAF8-A478F3B24BAB"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+            string Sync_Manager = @"T:\Lopez\1.xlsx";
+            TaskDialog.Show("!", "Select an Existing Section");
+
+            //Autodesk.Revit.DB.Viewport bbox_view = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Grid")) as Autodesk.Revit.DB.Viewport;
+
+            // Get selected elements from current document.;
+            ICollection<ElementId> selectedIds = uidoc.Selection.GetElementIds();
+
+            string s = "You Picked:" + "\n";
+
+            using (Transaction tx2 = new Transaction(doc))
+            {
+                tx2.Start("Create Wall Section View");
+
+                foreach (ElementId selectedid in selectedIds)
+                {
+                    Autodesk.Revit.DB.View e = doc.GetElement(selectedid) as Autodesk.Revit.DB.View;
+
+
+                    BoundingBoxXYZ box = e.get_BoundingBox(null);
+                    Autodesk.Revit.DB.Transform transform = box.Transform;
+
+                    double TransX = transform.Origin.X;
+                    double TransY = transform.Origin.Y;
+                    double TransZ = transform.Origin.Z;
+
+                    XYZ TransBasisX = InvCoord(transform.BasisX);
+                    XYZ TransBasisY = InvCoord(transform.BasisY);
+                    XYZ TransBasisZ = InvCoord(transform.BasisZ);
+
+                    XYZ min = box.Min;
+                    XYZ max = box.Max;
+
+                    
+
+                    Autodesk.Revit.DB.Line line_ = Autodesk.Revit.DB.Line.CreateUnbound(transform.Origin, XYZ.BasisZ);
+                    XYZ vect_dir_left1 = line_.Direction * (1100 / 304.8);
+                    XYZ vect_dir_left2 = vect_dir_left1 + transform.Origin;
+                    ModelCurve mline_dir_left2 = Makeline(doc, transform.Origin, vect_dir_left2);
+                    ModelCurve min_max = Makeline(doc, min, max);
+
+                    using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+                    {
+                        ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+                        var Time_ = DateTime.Now;
+
+                        sheet.Cells[1, 1].Value = TransX;
+                        sheet.Cells[1, 2].Value = TransY;
+                        sheet.Cells[1, 3].Value = TransZ;
+
+                        sheet.Cells[2, 1].Value = Math.Round(TransBasisX.X, 0);
+                        sheet.Cells[2, 2].Value = Math.Round(TransBasisX.Y, 0);
+                        sheet.Cells[2, 3].Value = Math.Round(TransBasisX.Z, 0);
+
+                        sheet.Cells[2, 4].Value = Math.Round(TransBasisY.X, 0);
+                        sheet.Cells[2, 5].Value = Math.Round(TransBasisY.Y, 0);
+                        sheet.Cells[2, 6].Value = Math.Round(TransBasisY.Z, 0);
+
+                        sheet.Cells[2, 7].Value = Math.Round(TransBasisZ.X, 0);
+                        sheet.Cells[2, 8].Value = Math.Round(TransBasisZ.Y, 0);
+                        sheet.Cells[2, 9].Value = Math.Round(TransBasisZ.Z, 0);
+
+                        sheet.Cells[3, 1].Value = min.X;
+                        sheet.Cells[3, 2].Value = min.Y;
+                        sheet.Cells[3, 3].Value = min.Z;
+
+                        sheet.Cells[3, 4].Value = max.X;
+                        sheet.Cells[3, 5].Value = max.Y;
+                        sheet.Cells[3, 6].Value = max.Z;
+                        package.Save();
+
+                        s += " transform.Origin = " + transform.Origin + "\n";
+                        s += " right = " + transform.BasisX + "\n";
+                        s += " up = " + transform.BasisY + "\n";
+                        s += " viewdir = " + transform.BasisZ + "\n";
+                        s += "\n";
+
+                        Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+                        t.Origin = transform.Origin;
+                        t.BasisX = InvCoord(transform.BasisX);
+                        t.BasisY = transform.BasisY;
+                        t.BasisZ = InvCoord(transform.BasisZ);
+
+                        BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
+                        sectionBox.Transform = t;
+                        sectionBox.Min = min;
+                        sectionBox.Max = max;
+
+                        ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
+
+                        ViewSection.CreateSection(doc, vft.Id, sectionBox);
+                    }
+                }
+
+                tx2.Commit();
+            }
+
+            
+            {
+                //TaskDialog.Show("Basic Element Info", s);
+            }
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Import_View_Details : IExternalCommand
+    {
+        public XYZ InvCoord(XYZ MyCoord)
+        {
+            XYZ invcoord = new XYZ((Convert.ToDouble(MyCoord.X * -1)),
+                (Convert.ToDouble(MyCoord.Y * -1)),
+                (Convert.ToDouble(MyCoord.Z * -1)));
+            return invcoord;
+        }
+        static AddInId appId = new AddInId(new Guid("5F46AA78-A136-6509-AAF8-A478F3B24BAB"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+            string Sync_Manager = @"T:\Lopez\1.xlsx";
+
+
+            ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
+            using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+            {
+                ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+
+                //int number = Convert.ToInt32(sheet.Cells[2, column].Value);
+
+                Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+                t.Origin = new XYZ((double)sheet.Cells[1, 1].Value, (double)sheet.Cells[1, 2].Value, (double)sheet.Cells[1, 3].Value);
+
+                XYZ x_ = new XYZ((double)sheet.Cells[2, 1].Value, (double)sheet.Cells[2, 2].Value, (double)sheet.Cells[2, 3].Value) ;
+                XYZ y_ = new XYZ((double)sheet.Cells[2, 4].Value, (double)sheet.Cells[2, 5].Value, (double)sheet.Cells[2, 6].Value);
+                XYZ z_ = new XYZ((double)sheet.Cells[2, 7].Value, (double)sheet.Cells[2, 8].Value, (double)sheet.Cells[2, 9].Value) ;
+
+                t.BasisX = x_;
+                t.BasisY = y_;
+                t.BasisZ = z_;
+
+                BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
+                //sectionBox.Transform = t;
+                //sectionBox.Transform.Origin = new XYZ((double)sheet.Cells[1, 1].Value, (double)sheet.Cells[1, 2].Value, (double)sheet.Cells[1, 3].Value);
+                sectionBox.Min = new XYZ((double)sheet.Cells[3, 1].Value, (double)sheet.Cells[3, 2].Value, (double)sheet.Cells[3, 3].Value);
+                sectionBox.Max = new XYZ((double)sheet.Cells[3, 4].Value, (double)sheet.Cells[3, 5].Value, (double)sheet.Cells[3, 6].Value);
+
+                using (Transaction tx2 = new Transaction(doc))
+                {
+                    tx2.Start("Create Wall Section View");
+
+                    ViewSection.CreateSection(doc, vft.Id, sectionBox);
+
+                    tx2.Commit();
+                }
+
+
+                package.Save();
+            }
+
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
+
 
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class Sync_Manager : IExternalCommand
@@ -853,14 +1084,24 @@ namespace STH_Automation_22
         public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
         {
             UIDocument uidoc = commandData.Application.ActiveUIDocument;
-            Document doc = uidoc.Document;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+            IList<UIView> openViews = uidoc.GetOpenUIViews();
+            foreach (UIView uiv in openViews)
+            {
+                if (uiv.ViewId != uidoc.ActiveView.Id)
+                {
+                    uiv.Close();
+                }
+            }
+
             SyncListUpdater SyncListUpdater_ = new SyncListUpdater();
             SyncListUpdater_.label3.Text = "Checking in 30 seconds";
             SyncListUpdater_.label4.Text = "Logged on at:";
             SyncListUpdater_.label5.Text = "Waiting list to sync";
 
             SyncListUpdater_.ShowDialog();
-            
+
 
             if (doc.Title == "RAC_basic_sample_project"  /*"RHR_BUILDING_A22"*/)
             {
@@ -922,7 +1163,7 @@ namespace STH_Automation_22
                             }
 
                         }
-
+                        SyncListUpdater_.listBox1.Items.Clear();
                         SyncListUpdater_.listBox1.Refresh();
                         SyncListUpdater_.listBox1.Update();
                         SyncListUpdater_.Show();
@@ -1210,6 +1451,8 @@ namespace STH_Automation_22
 
         }
     }
+
+
     class ribbonUI : IExternalApplication
     {
         public static FailureDefinitionId failureDefinitionId = new FailureDefinitionId(new Guid("E7BC1F65-781D-48E8-AF37-1136B62913F5"));
@@ -1248,6 +1491,12 @@ namespace STH_Automation_22
 
             PushButton Button6 = (PushButton)panel_1.AddItem(new PushButtonData("Sync Manager", "Sync Manager", dll, "STH_Automation_22.Sync_Manager"));
             Button6.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "sync.png"), UriKind.Absolute));
+
+            PushButton Button7 = (PushButton)panel_1.AddItem(new PushButtonData("View BBox", "View BBox", dll, "STH_Automation_22.Export_View_Details"));
+            Button7.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "sync.png"), UriKind.Absolute));
+
+            PushButton Button8 = (PushButton)panel_1.AddItem(new PushButtonData("Import View", "Import View", dll, "STH_Automation_22.Import_View_Details"));
+            Button8.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "sync.png"), UriKind.Absolute));
 
             return Autodesk.Revit.UI.Result.Succeeded;
         }
