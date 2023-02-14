@@ -929,86 +929,83 @@ namespace STH_Automation_22
                 {
                     Autodesk.Revit.DB.View e = doc.GetElement(selectedid) as Autodesk.Revit.DB.View;
 
+                    BoundingBoxXYZ Cbox = e.CropBox;
+                    Autodesk.Revit.DB.Transform Cboxtransform = Cbox.Transform;
 
-                    BoundingBoxXYZ box = e.get_BoundingBox(null);
+                    BoundingBoxXYZ box = e.get_BoundingBox(/*null*/ e);
                     Autodesk.Revit.DB.Transform transform = box.Transform;
 
-                    double TransX = transform.Origin.X;
-                    double TransY = transform.Origin.Y;
-                    double TransZ = transform.Origin.Z;
-
-                    XYZ TransBasisX = InvCoord(transform.BasisX);
-                    XYZ TransBasisY = InvCoord(transform.BasisY);
-                    XYZ TransBasisZ = InvCoord(transform.BasisZ);
+                    //double TransX = transform.Origin.X;
+                    //double TransY = transform.Origin.Y;
+                    //double TransZ = transform.Origin.Z;
+                    //XYZ TransBasisX = InvCoord(transform.BasisX);
+                    //XYZ TransBasisY = InvCoord(transform.BasisY);
+                    //XYZ TransBasisZ = InvCoord(transform.BasisZ);
 
                     XYZ min = box.Min;
                     XYZ max = box.Max;
 
-                    
-
-                    Autodesk.Revit.DB.Line line_ = Autodesk.Revit.DB.Line.CreateUnbound(transform.Origin, XYZ.BasisZ);
-                    XYZ vect_dir_left1 = line_.Direction * (1100 / 304.8);
-                    XYZ vect_dir_left2 = vect_dir_left1 + transform.Origin;
-                    ModelCurve mline_dir_left2 = Makeline(doc, transform.Origin, vect_dir_left2);
-                    ModelCurve min_max = Makeline(doc, min, max);
+                    ModelCurve min_max = Makeline(doc, transform.OfPoint(box.Min), transform.OfPoint(box.Max));
+                    ModelCurve cen_max = Makeline(doc, transform.Origin, transform.OfPoint(box.Max));
 
                     using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
                     {
-                        ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
-                        var Time_ = DateTime.Now;
-
-                        sheet.Cells[1, 1].Value = TransX;
-                        sheet.Cells[1, 2].Value = TransY;
-                        sheet.Cells[1, 3].Value = TransZ;
-
-                        sheet.Cells[2, 1].Value = Math.Round(TransBasisX.X, 0);
-                        sheet.Cells[2, 2].Value = Math.Round(TransBasisX.Y, 0);
-                        sheet.Cells[2, 3].Value = Math.Round(TransBasisX.Z, 0);
-
-                        sheet.Cells[2, 4].Value = Math.Round(TransBasisY.X, 0);
-                        sheet.Cells[2, 5].Value = Math.Round(TransBasisY.Y, 0);
-                        sheet.Cells[2, 6].Value = Math.Round(TransBasisY.Z, 0);
-
-                        sheet.Cells[2, 7].Value = Math.Round(TransBasisZ.X, 0);
-                        sheet.Cells[2, 8].Value = Math.Round(TransBasisZ.Y, 0);
-                        sheet.Cells[2, 9].Value = Math.Round(TransBasisZ.Z, 0);
-
-                        sheet.Cells[3, 1].Value = min.X;
-                        sheet.Cells[3, 2].Value = min.Y;
-                        sheet.Cells[3, 3].Value = min.Z;
-
-                        sheet.Cells[3, 4].Value = max.X;
-                        sheet.Cells[3, 5].Value = max.Y;
-                        sheet.Cells[3, 6].Value = max.Z;
-                        package.Save();
-
-                        s += " transform.Origin = " + transform.Origin + "\n";
-                        s += " right = " + transform.BasisX + "\n";
-                        s += " up = " + transform.BasisY + "\n";
-                        s += " viewdir = " + transform.BasisZ + "\n";
-                        s += "\n";
-
+                        //ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+                        //sheet.Cells[1, 1].Value = TransX;
+                        //sheet.Cells[1, 2].Value = TransY;
+                        //sheet.Cells[1, 3].Value = TransZ;
+                        //sheet.Cells[2, 1].Value = Math.Round(TransBasisX.X, 0);
+                        //sheet.Cells[2, 2].Value = Math.Round(TransBasisX.Y, 0);
+                        //sheet.Cells[2, 3].Value = Math.Round(TransBasisX.Z, 0);
+                        //sheet.Cells[2, 4].Value = Math.Round(TransBasisY.X, 0);
+                        //sheet.Cells[2, 5].Value = Math.Round(TransBasisY.Y, 0);
+                        //sheet.Cells[2, 6].Value = Math.Round(TransBasisY.Z, 0);
+                        //sheet.Cells[2, 7].Value = Math.Round(TransBasisZ.X, 0);
+                        //sheet.Cells[2, 8].Value = Math.Round(TransBasisZ.Y, 0);
+                        //sheet.Cells[2, 9].Value = Math.Round(TransBasisZ.Z, 0);
+                        //sheet.Cells[3, 1].Value = min.X;
+                        //sheet.Cells[3, 2].Value = min.Y;
+                        //sheet.Cells[3, 3].Value = min.Z;
+                        //sheet.Cells[3, 4].Value = max.X;
+                        //sheet.Cells[3, 5].Value = max.Y;
+                        //sheet.Cells[3, 6].Value = max.Z;
+                        
                         Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
-                        t.Origin = transform.Origin;
+
+                        XYZ symBoxBL = transform.OfPoint(box.Min);  // BL=bottom left
+                        XYZ symBoxTR = transform.OfPoint(box.Max);  // TR=top right
+                        XYZ symBoxTL = new XYZ(symBoxBL.X, symBoxTR.Y, 0);
+                        XYZ symBoxBR = new XYZ(symBoxTR.X, symBoxBL.Y, 0);
+                          
+                        t.Origin = symBoxBR /*transform.OfPoint(box.Min)*/ /*transform.OfPoint(box.Min)*/ /*new XYZ( (transform.Origin.X * -1), transform.Origin.Y, transform.Origin.Z * - 1)*/  ;
+
                         t.BasisX = InvCoord(transform.BasisX);
                         t.BasisY = transform.BasisY;
                         t.BasisZ = InvCoord(transform.BasisZ);
 
+                        //t.BasisX = transform.BasisX; //Rightdir
+                        //t.BasisY = transform.BasisY; //up
+                        //t.BasisZ = transform.BasisX.CrossProduct(transform.BasisY); //viewdir
+
                         BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
+
                         sectionBox.Transform = t;
                         sectionBox.Min = min;
                         sectionBox.Max = max;
 
-                        ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
+                        XYZ maxWCS = transform.OfPoint(box.Max);
+                        XYZ minWCS = transform.OfPoint(box.Min);
 
-                        ViewSection.CreateSection(doc, vft.Id, sectionBox);
+                        ModelCurve New_cen_max = Makeline(doc, transform.OfPoint(sectionBox.Min), transform.OfPoint(sectionBox.Max));
+
+                        ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
+                        ViewSection.CreateSection(doc, vft.Id, sectionBox /*box*/);
+                        
+                        package.Save();
                     }
                 }
-
                 tx2.Commit();
-            }
-
-            
+            } 
             {
                 //TaskDialog.Show("Basic Element Info", s);
             }
@@ -1037,6 +1034,12 @@ namespace STH_Automation_22
             using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
             {
                 ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+
+                //s += " transform.Origin = " + transform.Origin + "\n";
+                //s += " right = " + transform.BasisX + "\n";
+                //s += " up = " + transform.BasisY + "\n";
+                //s += " viewdir = " + transform.BasisZ + "\n";
+                //s += "\n";
 
                 //int number = Convert.ToInt32(sheet.Cells[2, column].Value);
 
