@@ -912,19 +912,11 @@ namespace STH_Automation_22
             Autodesk.Revit.DB.Document doc = uidoc.Document;
 
             string Sync_Manager = @"T:\Lopez\1.xlsx";
-            TaskDialog.Show("!", "Select an Existing Section");
-
-            //Autodesk.Revit.DB.Viewport bbox_view = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Grid")) as Autodesk.Revit.DB.Viewport;
-
-            // Get selected elements from current document.;
             ICollection<ElementId> selectedIds = uidoc.Selection.GetElementIds();
-
-            string s = "You Picked:" + "\n";
 
             using (Transaction tx2 = new Transaction(doc))
             {
                 tx2.Start("Create Wall Section View");
-
                 foreach (ElementId selectedid in selectedIds)
                 {
                     Autodesk.Revit.DB.View e = doc.GetElement(selectedid) as Autodesk.Revit.DB.View;
@@ -932,8 +924,55 @@ namespace STH_Automation_22
                     BoundingBoxXYZ Cbox = e.CropBox;
                     Autodesk.Revit.DB.Transform Cboxtransform = Cbox.Transform;
 
-                    BoundingBoxXYZ box = e.get_BoundingBox(/*null*/ e);
+                    BoundingBoxXYZ box = e.get_BoundingBox(e);
                     Autodesk.Revit.DB.Transform transform = box.Transform;
+
+                    Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+
+                   
+                    XYZ symBoxBL = box.Min;  // BL=bottom left
+                    XYZ symBoxTR = box.Max;  // TR=top right
+                    XYZ symBoxTL = new XYZ(symBoxBL.X, symBoxTR.Y, box.Min.Z);
+                    XYZ symBoxBR = new XYZ(symBoxTR.X, symBoxBL.Y, box.Min.Z);
+
+                    // Apply transform to each corner to find actual instance Bbox coordinates
+                    var transf = box.Transform;
+                    XYZ coordBL = transf.OfPoint(symBoxBL);
+                    XYZ coordTR = transf.OfPoint(symBoxTR);
+                    XYZ coordTL = transf.OfPoint(symBoxTL);
+                    XYZ coordBR = transf.OfPoint(symBoxBR);
+
+
+                    t.Origin = coordBR;
+
+                    t.BasisX = InvCoord(transform.BasisX);
+                    t.BasisY = transform.BasisY;
+                    t.BasisZ = InvCoord(transform.BasisZ);
+
+                    //t.BasisX = transform.BasisX; //Rightdir
+                    //t.BasisY = transform.BasisY; //up
+                    //t.BasisZ = transform.BasisX.CrossProduct(transform.BasisY); //viewdir
+
+                    BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
+
+                    sectionBox.Transform = t;
+                    XYZ min = box.Min;
+                    XYZ max = box.Max;
+                    sectionBox.Min = min;
+                    sectionBox.Max = max;
+
+                    sectionBox.Transform.Origin = coordBR;
+
+                    //sectionBox.Max = transform.OfPoint(box.Max);
+                    //sectionBox.Min = transform.OfPoint(box.Min);
+
+                    ModelCurve New_cen_max = Makeline(doc, transform.OfPoint(sectionBox.Min), transform.OfPoint(sectionBox.Max));
+                    ModelCurve bot_left = Makeline(doc, coordTL, coordBR);
+
+                    ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
+                    ViewSection.CreateSection(doc, vft.Id, sectionBox /*box*/);
+
+
 
                     //double TransX = transform.Origin.X;
                     //double TransY = transform.Origin.Y;
@@ -941,12 +980,9 @@ namespace STH_Automation_22
                     //XYZ TransBasisX = InvCoord(transform.BasisX);
                     //XYZ TransBasisY = InvCoord(transform.BasisY);
                     //XYZ TransBasisZ = InvCoord(transform.BasisZ);
-
-                    XYZ min = box.Min;
-                    XYZ max = box.Max;
-
-                    ModelCurve min_max = Makeline(doc, transform.OfPoint(box.Min), transform.OfPoint(box.Max));
-                    ModelCurve cen_max = Makeline(doc, transform.Origin, transform.OfPoint(box.Max));
+                    
+                    //ModelCurve min_max = Makeline(doc, transform.OfPoint(box.Min), transform.OfPoint(box.Max));
+                    //ModelCurve cen_max = Makeline(doc, transform.Origin, transform.OfPoint(box.Max));
 
                     using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
                     {
@@ -969,37 +1005,6 @@ namespace STH_Automation_22
                         //sheet.Cells[3, 4].Value = max.X;
                         //sheet.Cells[3, 5].Value = max.Y;
                         //sheet.Cells[3, 6].Value = max.Z;
-                        
-                        Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
-
-                        XYZ symBoxBL = transform.OfPoint(box.Min);  // BL=bottom left
-                        XYZ symBoxTR = transform.OfPoint(box.Max);  // TR=top right
-                        XYZ symBoxTL = new XYZ(symBoxBL.X, symBoxTR.Y, 0);
-                        XYZ symBoxBR = new XYZ(symBoxTR.X, symBoxBL.Y, 0);
-                          
-                        t.Origin = symBoxBR /*transform.OfPoint(box.Min)*/ /*transform.OfPoint(box.Min)*/ /*new XYZ( (transform.Origin.X * -1), transform.Origin.Y, transform.Origin.Z * - 1)*/  ;
-
-                        t.BasisX = InvCoord(transform.BasisX);
-                        t.BasisY = transform.BasisY;
-                        t.BasisZ = InvCoord(transform.BasisZ);
-
-                        //t.BasisX = transform.BasisX; //Rightdir
-                        //t.BasisY = transform.BasisY; //up
-                        //t.BasisZ = transform.BasisX.CrossProduct(transform.BasisY); //viewdir
-
-                        BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
-
-                        sectionBox.Transform = t;
-                        sectionBox.Min = min;
-                        sectionBox.Max = max;
-
-                        XYZ maxWCS = transform.OfPoint(box.Max);
-                        XYZ minWCS = transform.OfPoint(box.Min);
-
-                        ModelCurve New_cen_max = Makeline(doc, transform.OfPoint(sectionBox.Min), transform.OfPoint(sectionBox.Max));
-
-                        ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
-                        ViewSection.CreateSection(doc, vft.Id, sectionBox /*box*/);
                         
                         package.Save();
                     }
