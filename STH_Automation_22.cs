@@ -28,6 +28,7 @@ using System.Windows.Media.Media3D;
 using Document = Autodesk.Revit.Creation.Document;
 using System.Data.Common;
 using System.Net;
+using static Autodesk.Internal.Windows.SwfMediaPlayer;
 #endregion
 namespace STH_Automation_22
 {
@@ -921,66 +922,95 @@ namespace STH_Automation_22
                 {
                     Autodesk.Revit.DB.View e = doc.GetElement(selectedid) as Autodesk.Revit.DB.View;
 
-                    BoundingBoxXYZ Cbox = e.CropBox;
-                    Autodesk.Revit.DB.Transform Cboxtransform = Cbox.Transform;
-
-                    BoundingBoxXYZ box = e.get_BoundingBox(e);
+                    BoundingBoxXYZ box = e.get_BoundingBox(/*e*/null);
                     Autodesk.Revit.DB.Transform transform = box.Transform;
 
-                    Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+                    XYZ min = box.Min;
+                    XYZ max = box.Max;
 
-                   
-                    XYZ symBoxBL = box.Min;  // BL=bottom left
-                    XYZ symBoxTR = box.Max;  // TR=top right
+                    XYZ symBoxBL = box.Min;  
+                    XYZ symBoxTR = box.Max;  
                     XYZ symBoxTL = new XYZ(symBoxBL.X, symBoxTR.Y, box.Min.Z);
                     XYZ symBoxBR = new XYZ(symBoxTR.X, symBoxBL.Y, box.Min.Z);
 
-                    // Apply transform to each corner to find actual instance Bbox coordinates
-                    var transf = box.Transform;
-                    XYZ coordBL = transf.OfPoint(symBoxBL);
-                    XYZ coordTR = transf.OfPoint(symBoxTR);
-                    XYZ coordTL = transf.OfPoint(symBoxTL);
-                    XYZ coordBR = transf.OfPoint(symBoxBR);
+                    XYZ symBoxA = new XYZ(symBoxTR.X, symBoxTR.Y, box.Min.Z);
 
+                    XYZ coordBL = transform.OfPoint(symBoxBL);  // 1) BL = bottom left 
+                    XYZ coordTR = transform.OfPoint(symBoxTR);  // 2) TR = top right    
+                    XYZ coordTL = transform.OfPoint(symBoxTL);  // 3) TL = top left
+                    XYZ coordBR = transform.OfPoint(symBoxBR);  // 4) BL = bottom right
 
-                    t.Origin = coordBR;
+                    XYZ coordB = new XYZ(coordTR.X, coordTR.Y, coordBL.Z);
+                    XYZ coordA = new XYZ(coordBL.X, coordTR.Y, coordBL.Z);
 
-                    t.BasisX = InvCoord(transform.BasisX);
-                    t.BasisY = transform.BasisY;
-                    t.BasisZ = InvCoord(transform.BasisZ);
+                    XYZ coordC = new XYZ(coordTR.X, coordBL.Y, coordBL.Z);
+                    XYZ coordD = new XYZ(coordBL.X, coordTR.Y, coordBL.Z);
 
-                    //t.BasisX = transform.BasisX; //Rightdir
-                    //t.BasisY = transform.BasisY; //up
-                    //t.BasisZ = transform.BasisX.CrossProduct(transform.BasisY); //viewdir
+                    Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(coordA, coordB);
+                    //Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(coordC, coordD);
+
+                    XYZ walldir = line.Direction ;
+                    XYZ up = XYZ.BasisZ;
+                    XYZ viewdir = walldir.CrossProduct(up);
+                    double distance = coordA.DistanceTo(coordBL);
+                    Autodesk.Revit.DB.Line lineAperp = Autodesk.Revit.DB.Line.CreateUnbound(coordB, viewdir);
+
+                    XYZ vect1 = lineAperp.Direction * (distance *-1 /*/ 304.8*/);
+                    XYZ vect2 = vect1 + coordB;
+                    Autodesk.Revit.DB.Line lineB = Autodesk.Revit.DB.Line.CreateBound(coordB, vect2);
+                    ModelCurve bot_left = Makeline(doc, coordB, vect2);
+
+                    Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+                    t.Origin = vect2;
+                    t.BasisX = walldir;
+                    t.BasisY = up;
+                    t.BasisZ = viewdir;
 
                     BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
-
                     sectionBox.Transform = t;
-                    XYZ min = box.Min;
-                    XYZ max = box.Max;
                     sectionBox.Min = min;
                     sectionBox.Max = max;
 
-                    sectionBox.Transform.Origin = coordBR;
 
-                    //sectionBox.Max = transform.OfPoint(box.Max);
-                    //sectionBox.Min = transform.OfPoint(box.Min);
+                    //Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+                    ////t.Origin = coordBR;
+                    ////t.BasisX = InvCoord(transform.BasisX);
+                    ////t.BasisY = transform.BasisY;
+                    ////t.BasisZ = InvCoord(transform.BasisZ);
+                    //t.Origin = transform.Origin;
+                    //t.BasisX = transform.BasisX;
+                    //t.BasisY = transform.BasisY;
+                    //t.BasisZ = transform.BasisZ;
+
+                    //BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
+                    //sectionBox.Transform = t;
+                    //sectionBox.Min = min;
+                    //sectionBox.Max = max;
 
                     ModelCurve New_cen_max = Makeline(doc, transform.OfPoint(sectionBox.Min), transform.OfPoint(sectionBox.Max));
-                    ModelCurve bot_left = Makeline(doc, coordTL, coordBR);
+                    ModelCurve bot_left2 = Makeline(doc, coordC, coordD);
 
                     ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
                     ViewSection.CreateSection(doc, vft.Id, sectionBox /*box*/);
 
 
 
+                    //Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateBound(coordBL, coordBR);
+
+                    //BoundingBoxXYZ Cbox = e.CropBox;
+                    //Autodesk.Revit.DB.Transform Cboxtransform = Cbox.Transform;
+                    //sectionBox.Max = transform.OfPoint(box.Max);
+                    //sectionBox.Min = transform.OfPoint(box.Min);
+                    //t.BasisX = transform.BasisX; //Rightdir
+                    //t.BasisY = transform.BasisY; //up
+                    //t.BasisZ = transform.BasisX.CrossProduct(transform.BasisY); //viewdir
                     //double TransX = transform.Origin.X;
                     //double TransY = transform.Origin.Y;
                     //double TransZ = transform.Origin.Z;
                     //XYZ TransBasisX = InvCoord(transform.BasisX);
                     //XYZ TransBasisY = InvCoord(transform.BasisY);
                     //XYZ TransBasisZ = InvCoord(transform.BasisZ);
-                    
+
                     //ModelCurve min_max = Makeline(doc, transform.OfPoint(box.Min), transform.OfPoint(box.Max));
                     //ModelCurve cen_max = Makeline(doc, transform.Origin, transform.OfPoint(box.Max));
 
