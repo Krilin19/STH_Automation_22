@@ -928,8 +928,8 @@ namespace STH_Automation_22
                     XYZ min = box.Min;
                     XYZ max = box.Max;
 
-                    XYZ symBoxBL = box.Min;  
-                    XYZ symBoxTR = box.Max;  
+                    XYZ symBoxBL = box.Min;
+                    XYZ symBoxTR = box.Max;
                     XYZ symBoxTL = new XYZ(symBoxBL.X, symBoxTR.Y, box.Min.Z);
                     XYZ symBoxBR = new XYZ(symBoxTR.X, symBoxBL.Y, box.Min.Z);
 
@@ -940,55 +940,55 @@ namespace STH_Automation_22
                     XYZ coordTL = transform.OfPoint(symBoxTL);  // 3) TL = top left
                     XYZ coordBR = transform.OfPoint(symBoxBR);  // 4) BL = bottom right
 
-                    XYZ coordB = new XYZ(coordTR.X, coordTR.Y, coordBL.Z);
-                    XYZ coordA = new XYZ(coordBL.X, coordTR.Y, coordBL.Z);
+                    //XYZ coordB = new XYZ(coordTR.X, coordTR.Y, coordBL.Z);
+                    //XYZ coordA = new XYZ(coordBL.X, coordTR.Y, coordBL.Z);
 
-                    XYZ coordC = new XYZ(coordTR.X, coordBL.Y, coordBL.Z);
-                    XYZ coordD = new XYZ(coordBL.X, coordTR.Y, coordBL.Z);
+                    //XYZ coordC = new XYZ(coordTR.X, coordBL.Y, coordBL.Z);
+                    //XYZ coordD = new XYZ(coordBL.X, coordTR.Y, coordBL.Z);
 
-                    Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(coordA, coordB);
-                    //Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(coordC, coordD);
+                    //Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(coordA, coordB);
+                    ////Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(coordC, coordD);
 
-                    XYZ walldir = line.Direction ;
-                    XYZ up = XYZ.BasisZ;
-                    XYZ viewdir = walldir.CrossProduct(up);
-                    double distance = coordA.DistanceTo(coordBL);
-                    Autodesk.Revit.DB.Line lineAperp = Autodesk.Revit.DB.Line.CreateUnbound(coordB, viewdir);
+                    //XYZ walldir = line.Direction ;
+                    //XYZ up = XYZ.BasisZ;
+                    //XYZ viewdir = walldir.CrossProduct(up);
+                    //double distance = coordA.DistanceTo(coordBL);
+                    //Autodesk.Revit.DB.Line lineAperp = Autodesk.Revit.DB.Line.CreateUnbound(coordB, viewdir);
 
-                    XYZ vect1 = lineAperp.Direction * (distance *-1 /*/ 304.8*/);
-                    XYZ vect2 = vect1 + coordB;
-                    Autodesk.Revit.DB.Line lineB = Autodesk.Revit.DB.Line.CreateBound(coordB, vect2);
-                    ModelCurve bot_left = Makeline(doc, coordB, vect2);
-
-                    Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
-                    t.Origin = vect2;
-                    t.BasisX = walldir;
-                    t.BasisY = up;
-                    t.BasisZ = viewdir;
-
-                    BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
-                    sectionBox.Transform = t;
-                    sectionBox.Min = min;
-                    sectionBox.Max = max;
-
+                    //XYZ vect1 = lineAperp.Direction * (distance *-1 /*/ 304.8*/);
+                    //XYZ vect2 = vect1 + coordB;
+                    //Autodesk.Revit.DB.Line lineB = Autodesk.Revit.DB.Line.CreateBound(coordB, vect2);
+                    //ModelCurve bot_left = Makeline(doc, coordB, vect2);
 
                     //Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
-                    ////t.Origin = coordBR;
-                    ////t.BasisX = InvCoord(transform.BasisX);
-                    ////t.BasisY = transform.BasisY;
-                    ////t.BasisZ = InvCoord(transform.BasisZ);
-                    //t.Origin = transform.Origin;
-                    //t.BasisX = transform.BasisX;
-                    //t.BasisY = transform.BasisY;
-                    //t.BasisZ = transform.BasisZ;
+                    //t.Origin = vect2;
+                    //t.BasisX = walldir;
+                    //t.BasisY = up;
+                    //t.BasisZ = viewdir;
 
                     //BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
                     //sectionBox.Transform = t;
                     //sectionBox.Min = min;
                     //sectionBox.Max = max;
 
+
+                    Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+                    t.Origin = coordBR;
+                    t.BasisX = InvCoord(transform.BasisX);
+                    t.BasisY = transform.BasisY;
+                    t.BasisZ = InvCoord(transform.BasisZ);
+                    //t.Origin = transform.Origin;
+                    //t.BasisX = transform.BasisX;
+                    //t.BasisY = transform.BasisY;
+                    //t.BasisZ = transform.BasisZ;
+
+                    BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
+                    sectionBox.Transform = t;
+                    sectionBox.Min = min;
+                    sectionBox.Max = max;
+
                     ModelCurve New_cen_max = Makeline(doc, transform.OfPoint(sectionBox.Min), transform.OfPoint(sectionBox.Max));
-                    ModelCurve bot_left2 = Makeline(doc, coordC, coordD);
+                    //ModelCurve bot_left2 = Makeline(doc, coordC, coordD);
 
                     ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
                     ViewSection.CreateSection(doc, vft.Id, sectionBox /*box*/);
