@@ -29,6 +29,8 @@ using Document = Autodesk.Revit.Creation.Document;
 using System.Data.Common;
 using System.Net;
 using static Autodesk.Internal.Windows.SwfMediaPlayer;
+
+
 #endregion
 namespace STH_Automation_22
 {
@@ -905,6 +907,7 @@ namespace STH_Automation_22
             return modelLine;
         }
 
+        
 
         static AddInId appId = new AddInId(new Guid("5F46AA78-A136-6509-AAF8-A478F3B24BAB"));
         public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
@@ -912,138 +915,191 @@ namespace STH_Automation_22
             UIDocument uidoc = commandData.Application.ActiveUIDocument;
             Autodesk.Revit.DB.Document doc = uidoc.Document;
 
+            UIApplication uiapp = commandData.Application;
+            DocumentSet documents = uiapp.Application.Documents;
+
+            IEnumerable<FamilySymbol> familyList = from elem in new FilteredElementCollector(doc).OfClass(typeof(FamilySymbol)).OfCategory(BuiltInCategory.OST_TitleBlocks)
+                                                   let type = elem as FamilySymbol
+                                                   select type;
+            
+
             string Sync_Manager = @"T:\Lopez\1.xlsx";
             ICollection<ElementId> selectedIds = uidoc.Selection.GetElementIds();
 
-            using (Transaction tx2 = new Transaction(doc))
+           
+
+            foreach (Autodesk.Revit.DB.Document doc_ in documents)
             {
-                tx2.Start("Create Wall Section View");
-                foreach (ElementId selectedid in selectedIds)
+
+                if (doc_.Title != doc.Title)
                 {
-                    Autodesk.Revit.DB.View e = doc.GetElement(selectedid) as Autodesk.Revit.DB.View;
-
-                    BoundingBoxXYZ box = e.get_BoundingBox(/*e*/null);
-                    Autodesk.Revit.DB.Transform transform = box.Transform;
-
-                    XYZ min = box.Min;
-                    XYZ max = box.Max;
-
-                    XYZ symBoxBL = box.Min;
-                    XYZ symBoxTR = box.Max;
-                    XYZ symBoxTL = new XYZ(symBoxBL.X, symBoxTR.Y, box.Min.Z);
-                    XYZ symBoxBR = new XYZ(symBoxTR.X, symBoxBL.Y, box.Min.Z);
-
-                    XYZ symBoxA = new XYZ(symBoxTR.X, symBoxTR.Y, box.Min.Z);
-
-                    XYZ coordBL = transform.OfPoint(symBoxBL);  // 1) BL = bottom left 
-                    XYZ coordTR = transform.OfPoint(symBoxTR);  // 2) TR = top right    
-                    XYZ coordTL = transform.OfPoint(symBoxTL);  // 3) TL = top left
-                    XYZ coordBR = transform.OfPoint(symBoxBR);  // 4) BL = bottom right
-
-                    //XYZ coordB = new XYZ(coordTR.X, coordTR.Y, coordBL.Z);
-                    //XYZ coordA = new XYZ(coordBL.X, coordTR.Y, coordBL.Z);
-
-                    //XYZ coordC = new XYZ(coordTR.X, coordBL.Y, coordBL.Z);
-                    //XYZ coordD = new XYZ(coordBL.X, coordTR.Y, coordBL.Z);
-
-                    //Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(coordA, coordB);
-                    ////Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(coordC, coordD);
-
-                    //XYZ walldir = line.Direction ;
-                    //XYZ up = XYZ.BasisZ;
-                    //XYZ viewdir = walldir.CrossProduct(up);
-                    //double distance = coordA.DistanceTo(coordBL);
-                    //Autodesk.Revit.DB.Line lineAperp = Autodesk.Revit.DB.Line.CreateUnbound(coordB, viewdir);
-
-                    //XYZ vect1 = lineAperp.Direction * (distance *-1 /*/ 304.8*/);
-                    //XYZ vect2 = vect1 + coordB;
-                    //Autodesk.Revit.DB.Line lineB = Autodesk.Revit.DB.Line.CreateBound(coordB, vect2);
-                    //ModelCurve bot_left = Makeline(doc, coordB, vect2);
-
-                    //Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
-                    //t.Origin = vect2;
-                    //t.BasisX = walldir;
-                    //t.BasisY = up;
-                    //t.BasisZ = viewdir;
-
-                    //BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
-                    //sectionBox.Transform = t;
-                    //sectionBox.Min = min;
-                    //sectionBox.Max = max;
-
-
-                    Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
-                    t.Origin = coordBR;
-                    t.BasisX = InvCoord(transform.BasisX);
-                    t.BasisY = transform.BasisY;
-                    t.BasisZ = InvCoord(transform.BasisZ);
-                    //t.Origin = transform.Origin;
-                    //t.BasisX = transform.BasisX;
-                    //t.BasisY = transform.BasisY;
-                    //t.BasisZ = transform.BasisZ;
-
-                    BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
-                    sectionBox.Transform = t;
-                    sectionBox.Min = min;
-                    sectionBox.Max = max;
-
-                    ModelCurve New_cen_max = Makeline(doc, transform.OfPoint(sectionBox.Min), transform.OfPoint(sectionBox.Max));
-                    //ModelCurve bot_left2 = Makeline(doc, coordC, coordD);
-
-                    ViewFamilyType vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
-                    ViewSection.CreateSection(doc, vft.Id, sectionBox /*box*/);
-
-
-
-                    //Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateBound(coordBL, coordBR);
-
-                    //BoundingBoxXYZ Cbox = e.CropBox;
-                    //Autodesk.Revit.DB.Transform Cboxtransform = Cbox.Transform;
-                    //sectionBox.Max = transform.OfPoint(box.Max);
-                    //sectionBox.Min = transform.OfPoint(box.Min);
-                    //t.BasisX = transform.BasisX; //Rightdir
-                    //t.BasisY = transform.BasisY; //up
-                    //t.BasisZ = transform.BasisX.CrossProduct(transform.BasisY); //viewdir
-                    //double TransX = transform.Origin.X;
-                    //double TransY = transform.Origin.Y;
-                    //double TransZ = transform.Origin.Z;
-                    //XYZ TransBasisX = InvCoord(transform.BasisX);
-                    //XYZ TransBasisY = InvCoord(transform.BasisY);
-                    //XYZ TransBasisZ = InvCoord(transform.BasisZ);
-
-                    //ModelCurve min_max = Makeline(doc, transform.OfPoint(box.Min), transform.OfPoint(box.Max));
-                    //ModelCurve cen_max = Makeline(doc, transform.Origin, transform.OfPoint(box.Max));
-
-                    using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+                    using (Transaction tx2 = new Transaction(doc_))
                     {
-                        //ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
-                        //sheet.Cells[1, 1].Value = TransX;
-                        //sheet.Cells[1, 2].Value = TransY;
-                        //sheet.Cells[1, 3].Value = TransZ;
-                        //sheet.Cells[2, 1].Value = Math.Round(TransBasisX.X, 0);
-                        //sheet.Cells[2, 2].Value = Math.Round(TransBasisX.Y, 0);
-                        //sheet.Cells[2, 3].Value = Math.Round(TransBasisX.Z, 0);
-                        //sheet.Cells[2, 4].Value = Math.Round(TransBasisY.X, 0);
-                        //sheet.Cells[2, 5].Value = Math.Round(TransBasisY.Y, 0);
-                        //sheet.Cells[2, 6].Value = Math.Round(TransBasisY.Z, 0);
-                        //sheet.Cells[2, 7].Value = Math.Round(TransBasisZ.X, 0);
-                        //sheet.Cells[2, 8].Value = Math.Round(TransBasisZ.Y, 0);
-                        //sheet.Cells[2, 9].Value = Math.Round(TransBasisZ.Z, 0);
-                        //sheet.Cells[3, 1].Value = min.X;
-                        //sheet.Cells[3, 2].Value = min.Y;
-                        //sheet.Cells[3, 3].Value = min.Z;
-                        //sheet.Cells[3, 4].Value = max.X;
-                        //sheet.Cells[3, 5].Value = max.Y;
-                        //sheet.Cells[3, 6].Value = max.Z;
-                        
-                        package.Save();
+                        tx2.Start("Create Wall Section View");
+                        foreach (ElementId selectedid in selectedIds)
+                        {
+
+                            List<Viewport> viewports = new List<Viewport>();
+                            List<ElementId> views = new List<ElementId>();
+
+                            Autodesk.Revit.DB.ViewSheet e = doc.GetElement(selectedid) as Autodesk.Revit.DB.ViewSheet;
+                            string type = e.GetType().Name;
+
+                            IList<ElementId> rev_Id = e.GetAllRevisionIds();
+                            ICollection<ElementId> views_ports = e.GetAllViewports();
+                            ICollection<ElementId> views_ = e.GetAllPlacedViews();
+
+                            try
+                            {
+                                foreach (var item in views_)
+                                {
+                                    views.Add(item);
+                                }
+
+
+                                IList<Viewport> viewports__ = new FilteredElementCollector(doc).OfClass(typeof(Viewport)).Cast<Viewport>()
+                                    .Where(q => q.SheetId == e.Id).ToList();
+                                foreach (var item in viewports__)
+                                {
+                                    viewports.Add(item);
+                                }
+                            }
+                            catch (Exception)
+                            {
+                                TaskDialog.Show("Warning", "Active View must be a sheet");
+                                throw;
+                            }
+
+
+                            if (type == "ViewSheet")
+                            {
+                                BoundingBoxXYZ box = e.get_BoundingBox(null /*doc.ActiveView*/);
+                                Autodesk.Revit.DB.Transform transform = box.Transform;
+
+
+
+                                XYZ min = box.Min;
+                                XYZ max = box.Max;
+                                XYZ symBoxBL = box.Min;
+                                XYZ symBoxTR = box.Max;
+                                XYZ symBoxTL = new XYZ(symBoxBL.X, symBoxTR.Y, box.Min.Z);
+                                XYZ symBoxBR = new XYZ(symBoxTR.X, symBoxBL.Y, box.Min.Z);
+                                XYZ symBoxA = new XYZ(symBoxTR.X, symBoxTR.Y, box.Min.Z);
+                                XYZ coordBL = transform.OfPoint(symBoxBL);  // 1) BL = bottom left 
+                                XYZ coordTR = transform.OfPoint(symBoxTR);  // 2) TR = top right  
+                                XYZ coordTL = transform.OfPoint(symBoxTL);  // 3) TL = top left
+                                XYZ coordBR = transform.OfPoint(symBoxBR);  // 4) BL = bottom right
+
+
+
+
+                                //XYZ end = new XYZ(coordTR.X, coordTR.Y, coordBL.Z);
+                                //Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(transform.OfPoint(box.Min), transform.OfPoint(box.Max));
+                                //XYZ midCero = new XYZ(line.Evaluate(0.5,true).X, line.Evaluate(0.5, true).Y, coordBL.Z);
+                                //Autodesk.Revit.DB.Plane plane = Autodesk.Revit.DB.Plane.CreateByNormalAndOrigin(transform.BasisZ, end);
+                                //double dis;
+                                //UV uv_;
+                                //plane.Project(coordBL, out uv_, out dis);
+                                //XYZ SecDir = transform.BasisX; //Rightdir
+                                //XYZ up = transform.BasisY;
+                                //XYZ viewdir = SecDir.CrossProduct(up);
+                                //XYZ vect1 = transform.BasisZ * (dis  /*/ 304.8*/);
+                                //XYZ vect2 = vect1 + coordBL;
+                                //Autodesk.Revit.DB.Line lineB = Autodesk.Revit.DB.Line.CreateBound(coordBL, vect2);
+                                //Autodesk.Revit.DB.Line lineC = Autodesk.Revit.DB.Line.CreateBound(vect2, end);
+                                //ModelCurve bot_left = Makeline(doc, coordBL, vect2);
+                                //XYZ endvect1 = transform.BasisZ.Negate() * (dis  /*/ 304.8*/);
+                                //XYZ endvect2 = endvect1 + end;
+                                //Autodesk.Revit.DB.Line lineD = Autodesk.Revit.DB.Line.CreateBound(end,endvect2);
+                                //ModelCurve bot_left2 = Makeline(doc, end, endvect2);
+                                //ModelCurve bot_left3 = Makeline(doc, coordBL, endvect2);
+                                //Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+                                //t.Origin = endvect2;
+                                //t.BasisX = lineC.Direction.Negate();
+                                //t.BasisY = up;
+                                //t.BasisZ = lineB.Direction.Negate();
+                                //BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
+                                //sectionBox.Transform = t;
+                                //sectionBox.Min = min;
+                                //sectionBox.Max = max;
+
+
+
+
+
+                                Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
+                                t.Origin = coordBR /*box.Transform.Origin*/;
+                                t.BasisX = InvCoord(transform.BasisX);
+                                t.BasisY = transform.BasisY;
+                                t.BasisZ = InvCoord(transform.BasisZ);
+                                BoundingBoxXYZ sectionBox = new BoundingBoxXYZ();
+                                sectionBox.Transform = t /*transform*/;
+                                sectionBox.Min = min;
+                                sectionBox.Max = max;
+                                ModelCurve New_cen_max = Makeline(doc_, transform.OfPoint(sectionBox.Min), transform.OfPoint(sectionBox.Max));
+                                ViewFamilyType vft = new FilteredElementCollector(doc_).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
+                                ViewSection.CreateSection(doc_, vft.Id, sectionBox /*box*/);
+
+
+                                //double TransX = transform.Origin.X;
+                                //double TransY = transform.Origin.Y;
+                                //double TransZ = transform.Origin.Z;
+                                //using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+                                //{
+                                //    ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+                                //    sheet.Cells[1, 1].Value = TransX;
+                                //    sheet.Cells[1, 2].Value = TransY;
+                                //    sheet.Cells[1, 3].Value = TransZ;
+                                //    sheet.Cells[2, 1].Value = Math.Round(t.BasisX.X, 0);
+                                //    sheet.Cells[2, 2].Value = Math.Round(t.BasisX.Y, 0);
+                                //    sheet.Cells[2, 3].Value = Math.Round(t.BasisX.Z, 0);
+                                //    sheet.Cells[2, 4].Value = Math.Round(t.BasisY.X, 0);
+                                //    sheet.Cells[2, 5].Value = Math.Round(t.BasisY.Y, 0);
+                                //    sheet.Cells[2, 6].Value = Math.Round(t.BasisY.Z, 0);
+                                //    sheet.Cells[2, 7].Value = Math.Round(t.BasisZ.X, 0);
+                                //    sheet.Cells[2, 8].Value = Math.Round(t.BasisZ.Y, 0);
+                                //    sheet.Cells[2, 9].Value = Math.Round(t.BasisZ.Z, 0);
+                                //    sheet.Cells[3, 1].Value = min.X;
+                                //    sheet.Cells[3, 2].Value = min.Y;
+                                //    sheet.Cells[3, 3].Value = min.Z;
+                                //    sheet.Cells[3, 4].Value = max.X;
+                                //    sheet.Cells[3, 5].Value = max.Y;
+                                //    sheet.Cells[3, 6].Value = max.Z;
+                                //    package.Save();
+                                //}
+
+
+                                ViewSheet sheet2 = ViewSheet.Create(doc_, familyList.First().Id);
+
+                                if (sheet2.LookupParameter("Sheet Number") != null)
+                                {
+                                    string parametro = e.LookupParameter("Sheet Number").AsString();
+                                    Parameter param = sheet2.LookupParameter("Sheet Number");
+                                    param.Set(parametro);
+                                }
+
+                                if (sheet2.LookupParameter("Sheet Name") != null)
+                                {
+                                    string parametro = e.LookupParameter("Sheet Name").AsString();
+                                    Parameter param2 = sheet2.LookupParameter("Sheet Name");
+                                    param2.Set(parametro);
+                                }
+                            }
+
+                        }
+                        tx2.Commit();
+
+
                     }
+                    {
+                        //TaskDialog.Show("Basic Element Info", s);
+                    }
+
                 }
-                tx2.Commit();
-            } 
-            {
-                //TaskDialog.Show("Basic Element Info", s);
+                
             }
+
+            
             return Autodesk.Revit.UI.Result.Succeeded;
         }
     }
