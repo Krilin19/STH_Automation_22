@@ -17,3 +17,4 @@ C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22.p
 C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22.SyncListUpdater.resources
 C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22Cs.csproj.GenerateResource.cache
 C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22.Properties.Resources.resources
+C:\Users\alopez\Documents\GitHub\STH_Automation_22\obj\Debug\STH_Automation_22.Form1.resources

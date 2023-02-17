@@ -29,6 +29,7 @@ using Document = Autodesk.Revit.Creation.Document;
 using System.Data.Common;
 using System.Net;
 using static Autodesk.Internal.Windows.SwfMediaPlayer;
+using System.Security.Cryptography;
 
 
 #endregion
@@ -926,7 +927,14 @@ namespace STH_Automation_22
             string Sync_Manager = @"T:\Lopez\1.xlsx";
             ICollection<ElementId> selectedIds = uidoc.Selection.GetElementIds();
 
-           
+            List<ViewSection> ViewSection_ = new List<ViewSection>();
+            List<ViewSheet> ViewSheet_ = new List<ViewSheet>();
+            List<Viewport> viewports = new List<Viewport>();
+            //List<ElementId> views_ = new List<ElementId>();
+            List<ElementId> text_type = new List<ElementId>();
+            List<XYZ> text_pt = new List<XYZ>();
+            List<TextNote> textnotessearch = new List<TextNote>();
+            List<XYZ> vp_centers = new List<XYZ>();
 
             foreach (Autodesk.Revit.DB.Document doc_ in documents)
             {
@@ -935,47 +943,37 @@ namespace STH_Automation_22
                 {
                     using (Transaction tx2 = new Transaction(doc_))
                     {
-                        tx2.Start("Create Wall Section View");
+                        tx2.Start("STH sheet copy");
                         foreach (ElementId selectedid in selectedIds)
                         {
 
-                            List<Viewport> viewports = new List<Viewport>();
-                            List<ElementId> views = new List<ElementId>();
 
                             Autodesk.Revit.DB.ViewSheet e = doc.GetElement(selectedid) as Autodesk.Revit.DB.ViewSheet;
                             string type = e.GetType().Name;
 
                             IList<ElementId> rev_Id = e.GetAllRevisionIds();
-                            ICollection<ElementId> views_ports = e.GetAllViewports();
-                            ICollection<ElementId> views_ = e.GetAllPlacedViews();
+                            //ICollection<ElementId> viewports = e.GetAllViewports();
+                            ICollection<ElementId> views = e.GetAllPlacedViews();
 
-                            try
+                            IList<Viewport> viewports__ = new FilteredElementCollector(doc).OfClass(typeof(Viewport)).Cast<Viewport>()
+                            .Where(q => q.SheetId == e.Id).ToList();
+
+                            foreach (var item in viewports__)
                             {
-                                foreach (var item in views_)
-                                {
-                                    views.Add(item);
-                                }
-
-
-                                IList<Viewport> viewports__ = new FilteredElementCollector(doc).OfClass(typeof(Viewport)).Cast<Viewport>()
-                                    .Where(q => q.SheetId == e.Id).ToList();
-                                foreach (var item in viewports__)
-                                {
-                                    viewports.Add(item);
-                                }
-                            }
-                            catch (Exception)
-                            {
-                                TaskDialog.Show("Warning", "Active View must be a sheet");
-                                throw;
+                                viewports.Add(item);
                             }
 
+                            foreach (var VP in viewports)
+                            {
+
+                                XYZ center = VP.GetBoxCenter();
+                                vp_centers.Add(center);
+                            }
 
                             if (type == "ViewSheet")
                             {
                                 BoundingBoxXYZ box = e.get_BoundingBox(null /*doc.ActiveView*/);
                                 Autodesk.Revit.DB.Transform transform = box.Transform;
-
 
 
                                 XYZ min = box.Min;
@@ -989,8 +987,6 @@ namespace STH_Automation_22
                                 XYZ coordTR = transform.OfPoint(symBoxTR);  // 2) TR = top right  
                                 XYZ coordTL = transform.OfPoint(symBoxTL);  // 3) TL = top left
                                 XYZ coordBR = transform.OfPoint(symBoxBR);  // 4) BL = bottom right
-
-
 
 
                                 //XYZ end = new XYZ(coordTR.X, coordTR.Y, coordBL.Z);
@@ -1024,9 +1020,6 @@ namespace STH_Automation_22
                                 //sectionBox.Max = max;
 
 
-
-
-
                                 Autodesk.Revit.DB.Transform t = Autodesk.Revit.DB.Transform.Identity;
                                 t.Origin = coordBR /*box.Transform.Origin*/;
                                 t.BasisX = InvCoord(transform.BasisX);
@@ -1038,7 +1031,9 @@ namespace STH_Automation_22
                                 sectionBox.Max = max;
                                 ModelCurve New_cen_max = Makeline(doc_, transform.OfPoint(sectionBox.Min), transform.OfPoint(sectionBox.Max));
                                 ViewFamilyType vft = new FilteredElementCollector(doc_).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().FirstOrDefault<ViewFamilyType>(x => ViewFamily.Section == x.ViewFamily);
-                                ViewSection.CreateSection(doc_, vft.Id, sectionBox /*box*/);
+                                ViewSection view_onproject =  ViewSection.CreateSection(doc_, vft.Id, sectionBox /*box*/);
+
+                                ViewSection_.Add(view_onproject);
 
 
                                 //double TransX = transform.Origin.X;
@@ -1071,6 +1066,8 @@ namespace STH_Automation_22
 
                                 ViewSheet sheet2 = ViewSheet.Create(doc_, familyList.First().Id);
 
+                                ViewSheet_.Add(sheet2);
+
                                 if (sheet2.LookupParameter("Sheet Number") != null)
                                 {
                                     string parametro = e.LookupParameter("Sheet Number").AsString();
@@ -1085,11 +1082,21 @@ namespace STH_Automation_22
                                     param2.Set(parametro);
                                 }
                             }
-
                         }
                         tx2.Commit();
-
-
+                        using (Transaction tx3 = new Transaction(doc_))
+                        {
+                            tx3.Start("STH sheet copy");
+                            foreach (var sheet2 in ViewSheet_)
+                            {
+                                Viewport viewport = Viewport.Create(doc_, sheet2.Id, ViewSection_.ToArray()[0].Id, new XYZ() /*vp_centers.ToArray()[centerpt]*/);
+                                if (Viewport.CanAddViewToSheet(doc, sheet2.Id, ViewSection_.ToArray()[0].Id))
+                                {
+                                    
+                                }
+                            }
+                            tx3.Commit();
+                        }
                     }
                     {
                         //TaskDialog.Show("Basic Element Info", s);
@@ -1098,11 +1105,10 @@ namespace STH_Automation_22
                 }
                 
             }
-
-            
             return Autodesk.Revit.UI.Result.Succeeded;
         }
     }
+
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class Import_View_Details : IExternalCommand
     {
@@ -1168,6 +1174,360 @@ namespace STH_Automation_22
         }
     }
 
+
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Create_Sun_Eye_view : IExternalCommand
+    {
+        public static List<List<XYZ>> GeTpoints(Autodesk.Revit.DB.Document doc_, List<List<XYZ>> xyz_faces, IList<CurveLoop> faceboundaries, List<List<Face>> list_faces)
+        {
+            if (list_faces == null)
+            {
+                list_faces = new List<List<Face>>();
+            }
+
+            for (int i = 0; i < list_faces.ToArray().Length; i++)
+            {
+                List<XYZ> puntos_ = new List<XYZ>();
+                foreach (Face f in list_faces.ToArray()[i])
+                {
+
+                    faceboundaries = f.GetEdgesAsCurveLoops();//new trying to get the outline of the face instead of the edges
+                    EdgeArrayArray edgeArrays = f.EdgeLoops;
+                    foreach (CurveLoop edges in faceboundaries)
+                    {
+                        puntos_.Add(null);
+                        foreach (Autodesk.Revit.DB.Curve edge in edges)
+                        {
+                            XYZ testPoint1 = edge.GetEndPoint(1);
+                            XYZ testPoint2 = edge.GetEndPoint(0);
+                            double lenght = Math.Round(edge.ApproximateLength, 0);
+                       
+
+                            double x = Math.Round(testPoint1.X, 0);
+                            double y = Math.Round(testPoint1.Y, 0);
+                            double z = Math.Round(testPoint1.Z, 0);
+
+                            ElementClassFilter filter = new ElementClassFilter(typeof(Floor));
+
+                            XYZ newpt = new XYZ(x, y, z);
+
+                            if (!puntos_.Contains(testPoint1))
+                            {
+                                puntos_.Add(testPoint1);
+
+                            }
+                        }
+                    }
+                    int num = f.EdgeLoops.Size;
+                }
+                xyz_faces.Add(puntos_);
+            }
+            return xyz_faces;
+        }
+        
+
+        public static ModelLine Makeline(Autodesk.Revit.DB.Document doc, XYZ pta, XYZ ptb)
+        {
+            ModelLine modelLine = null;
+            double distance = pta.DistanceTo(ptb);
+            if (distance < 0.01)
+            {
+                TaskDialog.Show("Error", "Distance" + distance);
+                return modelLine;
+            }
+
+            XYZ norm = pta.CrossProduct(ptb);
+            if (norm.GetLength() == 0)
+            {
+                XYZ aSubB = pta.Subtract(ptb);
+                XYZ aSubBcrossz = aSubB.CrossProduct(XYZ.BasisZ);
+                double crosslenght = aSubBcrossz.GetLength();
+                if (crosslenght == 0)
+                {
+                    norm = XYZ.BasisY;
+                }
+                else
+                {
+                    norm = XYZ.BasisZ;
+                }
+            }
+
+            //Autodesk.Revit.DB.Plane plane = Autodesk.Revit.DB.Plane.CreateByNormalAndOrigin(norm, ptb);
+
+            Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateUnbound(ptb, XYZ.BasisZ /* XYZ.BasisZ*/);
+
+            Autodesk.Revit.DB.Plane pl = Autodesk.Revit.DB.Plane.CreateByThreePoints(pta,
+             line.Evaluate(5, false), ptb);
+
+            SketchPlane skplane = SketchPlane.Create(doc, pl);
+
+            Autodesk.Revit.DB.Line line2 = Autodesk.Revit.DB.Line.CreateBound(pta, ptb);
+
+            if (doc.IsFamilyDocument)
+            {
+                modelLine = doc.FamilyCreate.NewModelCurve(line2, skplane) as ModelLine;
+            }
+            else
+            {
+                modelLine = doc.Create.NewModelCurve(line2, skplane) as ModelLine;
+            }
+            if (modelLine == null)
+            {
+                TaskDialog.Show("Error", "Model line = null");
+            }
+            return modelLine;
+        }
+
+        public double MapValue(double start_n, double end_n, double mapped_n_menusone, double mapped_n_one, double number_tobe_map)
+        {
+            return mapped_n_menusone + (mapped_n_one - mapped_n_menusone) * ((number_tobe_map - start_n) / (end_n - start_n));
+        }
+        public ViewOrientation3D GetCurrentViewOrientation(UIDocument doc)
+        {
+            XYZ UpDir = doc.ActiveView.UpDirection;
+            XYZ ViewDir = doc.ActiveView.ViewDirection;
+            XYZ ViewInvDir = InvCoord(ViewDir);
+            XYZ eye = new XYZ(0, 0, 0);
+            XYZ up = UpDir;
+            XYZ forward = ViewInvDir;
+            ViewOrientation3D MyNewOrientation = new ViewOrientation3D(eye, up, forward);
+            return MyNewOrientation;
+        }
+
+        public XYZ InvCoord(XYZ MyCoord)
+        {
+            XYZ invcoord = new XYZ((Convert.ToDouble(MyCoord.X * -1)),
+                (Convert.ToDouble(MyCoord.Y * -1)),
+                (Convert.ToDouble(MyCoord.Z * -1)));
+            return invcoord;
+        }
+        public XYZ CrossProduct(XYZ v1, XYZ v2)
+        {
+            double x, y, z;
+            x = v1.Y * v2.Z - v2.Y * v1.Z;
+            y = (v1.X * v2.Z - v2.X * v1.Z) * -1;
+            z = v1.X * v2.Y - v2.X * v1.Y;
+            var rtnvector = new XYZ(x, y, z);
+            return rtnvector;
+        }
+        public XYZ VectorFromHorizVertAngles(double angleHorizD, double angleVertD)
+        {
+            double degToRadian = Math.PI * 2 / 360;
+            double angleHorizR = angleHorizD * degToRadian;
+            double angleVertR = angleVertD * degToRadian;
+            double a = Math.Cos(angleVertR);
+            double b = Math.Cos(angleHorizR);
+            double c = Math.Sin(angleHorizR);
+            double d = Math.Sin(angleVertR);
+            return new XYZ(a * b, a * c, d);
+        }
+
+        public class Vector3D
+        {
+            public Vector3D(XYZ revitXyz)
+            {
+                XYZ = revitXyz;
+            }
+            public Vector3D() : this(XYZ.Zero)
+            { }
+            public Vector3D(double x, double y, double z)
+              : this(new XYZ(x, y, z))
+            { }
+            public XYZ XYZ { get; private set; }
+            public double X => XYZ.X;
+            public double Y => XYZ.Y;
+            public double Z => XYZ.Z;
+            public Vector3D CrossProduct(Vector3D source)
+            {
+                return new Vector3D(XYZ.CrossProduct(source.XYZ));
+            }
+            public double GetLength()
+            {
+                return XYZ.GetLength();
+            }
+            public override string ToString()
+            {
+                return XYZ.ToString();
+            }
+            public static Vector3D BasisX => new Vector3D(
+              XYZ.BasisX);
+            public static Vector3D BasisY => new Vector3D(
+              XYZ.BasisY);
+            public static Vector3D BasisZ => new Vector3D(
+              XYZ.BasisZ);
+        }
+        static AddInId appId = new AddInId(new Guid("8D3F5703-A09A-6ED6-864C-5720329D9677"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+            UIApplication uiapp = commandData.Application;
+            Autodesk.Revit.ApplicationServices.Application app = doc.Application;
+
+            //try
+            //{
+            //    string filename = @"T:\Transfer\lopez\Book1.xlsx";
+            //    using (ExcelPackage package = new ExcelPackage(new FileInfo(filename)))
+            //    {
+            //        ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+
+            //        int column = 2;
+            //        int number = Convert.ToInt32(sheet.Cells[2, column].Value);
+            //        sheet.Cells[2, column].Value = (number + 1); ;
+            //        package.Save();
+            //    }
+            //}
+            //catch (Exception)
+            //{
+            //    MessageBox.Show("Excel file not found", "");
+            //}
+
+         
+
+            ProjectLocation plCurrent = doc.ActiveProjectLocation;
+
+
+            Autodesk.Revit.DB.View currentView = uidoc.ActiveView;
+            SunAndShadowSettings sunSettings = currentView.SunAndShadowSettings;
+
+
+            // Set the initial direction of the sun at ground level (like sunrise level)
+            XYZ initialDirection = XYZ.BasisY;
+
+            // Get the altitude of the sun from the sun settings
+            double altitude = sunSettings.GetFrameAltitude(
+              sunSettings.ActiveFrame);
+
+            // Create a transform along the X axis based on the altitude of the sun
+            Autodesk.Revit.DB.Transform altitudeRotation = Autodesk.Revit.DB.Transform
+              .CreateRotation(XYZ.BasisX, altitude);
+
+            // Create a rotation vector for the direction of the altitude of the sun
+            XYZ altitudeDirection = altitudeRotation
+              .OfVector(initialDirection);
+
+            // Get the azimuth from the sun settings of the scene
+            double azimuth = sunSettings.GetFrameAzimuth(
+              sunSettings.ActiveFrame);
+
+            // Correct the value of the actual azimuth with true north
+
+            // Get the true north angle of the project
+            Element projectInfoElement
+              = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_ProjectBasePoint)
+                .FirstElement();
+
+            BuiltInParameter bipAtn
+              = BuiltInParameter.BASEPOINT_ANGLETON_PARAM;
+
+            Parameter patn = projectInfoElement.get_Parameter(
+              bipAtn);
+
+            double trueNorthAngle = patn.AsDouble();
+
+            // Add the true north angle to the azimuth
+            double actualAzimuth = 2 * Math.PI - azimuth + trueNorthAngle;
+
+            // Create a rotation vector around the Z axis
+            Autodesk.Revit.DB.Transform azimuthRotation = Autodesk.Revit.DB.Transform
+              .CreateRotation(XYZ.BasisZ, actualAzimuth);
+
+            // Finally, calculate the direction of the sun
+            XYZ sunDirection = azimuthRotation.OfVector(
+              altitudeDirection);
+
+
+
+            //}
+            IEnumerable<ViewFamilyType> viewFamilyTypes = from elem in new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType))
+                                                          let type = elem as ViewFamilyType
+                                                          where type.ViewFamily == ViewFamily.ThreeDimensional
+                                                          select type;
+
+
+            XYZ UpDir = uidoc.ActiveView.UpDirection;
+           
+
+            ViewOrientation3D viewOrientation3D;
+            using (Transaction tr1 = new Transaction(doc))
+            {
+            
+                tr1.Start("Place vs in sheet");
+                View3D view3D = View3D.CreateIsometric(doc, viewFamilyTypes.First().Id);
+                tr1.SetName("Create view " + view3D.Name);
+   
+
+                XYZ eye = XYZ.Zero;
+                XYZ inverted_sun_location = InvCoord(sunDirection);
+
+                XYZ origin_b = new XYZ(0, 0, 0);
+                XYZ normal_B = new XYZ(1, 0, 0);
+
+
+                Autodesk.Revit.DB.Transform trans3;
+                Autodesk.Revit.DB.Transform trans_inverted_direction;
+
+
+                Autodesk.Revit.DB.Line line2 = Autodesk.Revit.DB.Line.CreateUnbound(new XYZ(0, 0, 0), sunDirection);
+                XYZ vect1 = line2.Direction * (100000 / 304.8);
+                XYZ vect2 = vect1 + new XYZ(0, 0, 0);
+                ModelCurve mc = Makeline(doc, line2.Origin, vect2);
+
+                Autodesk.Revit.DB.Plane Plane_mirror = Autodesk.Revit.DB.Plane.CreateByNormalAndOrigin(/*mc.SketchPlane.GetPlane().Normal*/ new XYZ(0, 0, 1), sunDirection);
+                Autodesk.Revit.DB.Plane forward_dir = Autodesk.Revit.DB.Plane.CreateByNormalAndOrigin(mc.SketchPlane.GetPlane().Normal, sunDirection);
+
+                trans3 = Autodesk.Revit.DB.Transform.CreateReflection(Plane_mirror);
+                XYZ inv_sun_mirrored = trans3.OfVector(inverted_sun_location);
+
+                trans_inverted_direction = Autodesk.Revit.DB.Transform.CreateReflection(forward_dir);
+                XYZ inverted_direction = trans_inverted_direction.OfVector(inverted_sun_location);
+
+                Autodesk.Revit.DB.Line line3 = Autodesk.Revit.DB.Line.CreateUnbound(new XYZ(0, 0, 0), inv_sun_mirrored);
+                XYZ invertedvect1 = line3.Direction * (100000 / 304.8);
+                XYZ invertedvect2 = invertedvect1 + new XYZ(0, 0, 0);
+                Makeline(doc, line2.Origin, invertedvect2);
+
+
+                XYZ cross_product = CrossProduct(/*inv_sun,*/ /*new_p*/ inv_sun_mirrored, inverted_sun_location);
+                Autodesk.Revit.DB.Line line4 = Autodesk.Revit.DB.Line.CreateUnbound(new XYZ(0, 0, 0), cross_product);
+                XYZ invertedvect3 = line4.Direction * (100000 / 304.8);
+                XYZ invertedvect4 = invertedvect3 + new XYZ(0, 0, 0);
+                Makeline(doc, line2.Origin, invertedvect4);
+
+
+                XYZ cross_product_up = CrossProduct(/*inv_sun,*/ /*new_p*/ line2.Direction, cross_product);
+
+
+
+                XYZ startPoint = sunDirection;
+                XYZ endPoint = inverted_sun_location;
+                Autodesk.Revit.DB.Line geomLine = Autodesk.Revit.DB.Line.CreateBound(startPoint, endPoint);
+                XYZ pntCenter = geomLine.Evaluate(0.0, true);
+                Autodesk.Revit.DB.Line geomLine2 = Autodesk.Revit.DB.Line.CreateBound(doc.ActiveView.Origin, XYZ.BasisZ);
+                Autodesk.Revit.DB.Plane geomPlane = Autodesk.Revit.DB.Plane.CreateByNormalAndOrigin(sunDirection, sunDirection);
+
+                SketchPlane sketch = SketchPlane.Create(doc, geomPlane);
+                sketch.Name = view3D.Name;
+                doc.ActiveView.SketchPlane = sketch;
+                doc.ActiveView.ShowActiveWorkPlane();
+                view3D.SketchPlane = sketch;
+                view3D.ShowActiveWorkPlane();
+
+
+                Autodesk.Revit.DB.Transform rot2 = Autodesk.Revit.DB.Transform.CreateRotation(/*orientLine.Direction*/mc.GeometryCurve.GetEndPoint(1), -2.60);
+                XYZ rotated_vec2 = rot2.OfVector(inverted_direction);
+
+                viewOrientation3D = new ViewOrientation3D(/*eye*/ mc.GeometryCurve.GetEndPoint(0), cross_product_up/*rotated_vec2*/ * -1, /*inverted_direction*/rotated_vec2);
+                view3D.SetOrientation(viewOrientation3D);
+                view3D.SaveOrientationAndLock();
+                tr1.Commit();
+            }
+
+
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
 
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class Sync_Manager : IExternalCommand
@@ -1546,6 +1906,662 @@ namespace STH_Automation_22
         }
     }
 
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Rhino_access : IExternalCommand
+    {
+        public static List<List<Element>> GetMembersRecursive(Autodesk.Revit.DB.Document d, Group g, List<List<Element>> r, List<List<string>> strin_name, List<int> int_)
+        {
+            if (strin_name == null)
+            {
+                strin_name = new List<List<string>>();
+            }
+            if (r == null)
+            {
+                r = new List<List<Element>>();
+            }
+            if (int_ == null)
+            {
+                int_ = new List<int>();
+            }
+            List<string> lista_nombre_main = new List<string>();
+            List<string> lista_nombre_buildings = new List<string>();
+            List<string> lista_nombre_floor = new List<string>();
+            List<Group> lista_de_buildings = new List<Group>();
+            List<Group> lista_de_floor = new List<Group>();
+            List<List<Element>> ele_list = new List<List<Element>>();
+            List<Element> ceiling_groups1 = new List<Element>();
+
+            List<Element> elems = g.GetMemberIds().Select(q => d.GetElement(q)).ToList();
+            lista_nombre_main.Add(g.Name);
+            lista_nombre_buildings.Add(g.Name);
+
+            foreach (Element el in elems)
+            {
+                if (el.GetType() == typeof(Group))
+                {
+                    Group gp = el as Group;
+                    lista_de_buildings.Add(gp);
+                    lista_nombre_buildings.Add(el.Name);
+                }
+                if (el.GetType() == typeof(Ceiling))
+                {
+                    ceiling_groups1.Add(el);
+                }
+            }
+            r.Add(ceiling_groups1);
+            for (int i = 0; i < lista_de_buildings.ToArray().Length; i++)
+            {
+                Group gp2 = lista_de_buildings.ToArray()[i];
+
+                List<Element> elems2 = gp2.GetMemberIds().Select(q => d.GetElement(q)).ToList();
+                ele_list.Add(elems2);
+            }
+
+            for (int i = 0; i < ele_list.ToArray().Length; i++)
+            {
+                List<Element> lista1 = ele_list.ToArray()[i];
+                List<Element> ceiling_groups = new List<Element>();
+                foreach (var item in lista1)
+                {
+                    if (item.GetType() == typeof(Group))
+                    {
+                        Group gp4 = item as Group;
+                        List<Element> elems3 = gp4.GetMemberIds().Select(q => d.GetElement(q)).ToList();
+                        foreach (var item2 in elems3)
+                        {
+                            if (item2.GetType() == typeof(Group))
+                            {
+                                Group gp5 = item2 as Group;
+                                List<Element> elems4 = gp5.GetMemberIds().Select(q => d.GetElement(q)).ToList();
+                                foreach (var item3 in elems4)
+                                {
+                                    if (item3.GetType() == typeof(Ceiling))
+                                    {
+                                        ceiling_groups.Add(item3);
+                                        lista_nombre_floor.Add(item.Name);
+                                    }
+                                }
+                            }
+                            if (item2.GetType() == typeof(Ceiling))
+                            {
+                                ceiling_groups.Add(item2);
+                                lista_nombre_floor.Add(item.Name);
+                            }
+                        }
+
+                        //lista_de_floor.Add(gp4);
+                        //lista_nombre_floor.Add(item.Name);
+                    }
+                    if (item.GetType() == typeof(Ceiling))
+                    {
+                        ceiling_groups.Add(item);
+                        lista_nombre_floor.Add(item.Name);
+
+                    }
+                }
+                r.Add(ceiling_groups);
+            }
+            strin_name.Add(lista_nombre_main);
+            strin_name.Add(lista_nombre_buildings);
+            strin_name.Add(lista_nombre_floor);
+
+            return r;
+
+        }
+
+        public static List<List<Face>> GetFaces(Autodesk.Revit.DB.Document doc_, List<List<Element>> list_elements, List<List<Face>> list_faces)
+        {
+            if (list_faces == null)
+            {
+                list_faces = new List<List<Face>>();
+            }
+            for (int i = 0; i < list_elements.ToArray().Length; i++)
+            {
+                List<Face> faces_list = new List<Face>();
+                List<Element> ele = list_elements.ToArray()[i];
+
+                foreach (var item in ele)
+                {
+                    Options op = new Options();
+                    op.ComputeReferences = true;
+                    foreach (var item2 in item.get_Geometry(op).Where(q => q is Solid).Cast<Solid>())
+                    {
+                        foreach (Face item3 in item2.Faces)
+                        {
+                            PlanarFace planarFace = item3 as PlanarFace;
+                            XYZ normal = planarFace.ComputeNormal(new UV(planarFace.Origin.X, planarFace.Origin.Y));
+
+                            if (normal.Z == 0 && normal.Y > -0.8 /*&& normal.X < 0*/)
+                            {
+                                Element e = doc_.GetElement(item3.Reference);
+                                GeometryObject geoobj = e.GetGeometryObjectFromReference(item3.Reference);
+                                Face face = geoobj as Face;
+                                faces_list.Add(face);
+                            }
+                        }
+                    }
+                }
+                if (faces_list.ToArray().Length > 0)
+                {
+                    list_faces.Add(faces_list);
+                }
+
+            }
+
+            return list_faces;
+        }
+
+        public static List<List<XYZ>> GeTpoints(Autodesk.Revit.DB.Document doc_, List<List<XYZ>> xyz_faces, IList<CurveLoop> faceboundaries, List<List<Face>> list_faces)
+        {
+            if (list_faces == null)
+            {
+                list_faces = new List<List<Face>>();
+            }
+
+            for (int i = 0; i < list_faces.ToArray().Length; i++)
+            {
+                List<XYZ> puntos_ = new List<XYZ>();
+                foreach (Face f in list_faces.ToArray()[i])
+                {
+
+                    faceboundaries = f.GetEdgesAsCurveLoops();//new trying to get the outline of the face instead of the edges
+                    EdgeArrayArray edgeArrays = f.EdgeLoops;
+                    foreach (CurveLoop edges in faceboundaries)
+                    {
+                        puntos_.Add(null);
+                        foreach (Autodesk.Revit.DB.Curve edge in edges)
+                        {
+                            XYZ testPoint1 = edge.GetEndPoint(1);
+                            double lenght = Math.Round(edge.ApproximateLength, 0);
+
+                            double x = Math.Round(testPoint1.X, 0);
+                            double y = Math.Round(testPoint1.Y, 0);
+                            double z = Math.Round(testPoint1.Z, 0);
+
+                            XYZ newpt = new XYZ(x, y, z);
+
+                            if (!puntos_.Contains(testPoint1))
+                            {
+                                puntos_.Add(testPoint1);
+
+                            }
+                        }
+                    }
+                    int num = f.EdgeLoops.Size;
+
+                }
+                xyz_faces.Add(puntos_);
+            }
+            return xyz_faces;
+
+        }
+
+        static AddInId appId = new AddInId(new Guid("D044091D-29A4-4F70-8FE5-84FBD4ED0D73"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIApplication uiapp = commandData.Application;
+            UIDocument uidoc = uiapp.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+          
+
+            //Form1 form3 = new Form1();
+            //form3.ShowDialog();
+
+
+
+
+            //if (form3.radioButton1.Checked)
+            //{
+            //    Form22 form4 = new Form22();
+            //    form4.ShowDialog();
+
+            //    Form20 form2 = new Form20();
+
+            //    form2.ShowDialog();
+            //}
+
+
+
+            List<Object> objs = new List<Object>();
+            List<List<XYZ>> xyz_faces = new List<List<XYZ>>();
+            IList<Face> face_with_regions = new List<Face>();
+            String info = "";
+            List<List<Face>> Faces_lists_excel = new List<List<Face>>();
+            //List<FaceArray> face112 = new List<FaceArray>();
+            IList<CurveLoop> faceboundaries = new List<CurveLoop>();
+            List<List<Element>> elemente_selected = new List<List<Element>>();
+            List<List<string>> names = new List<List<string>>();
+            List<int> numeros_ = new List<int>();
+            XYZ pos_z = new XYZ(0, 0, 1);
+            XYZ neg_z = new XYZ(0, 0, -1);
+
+            Form1 form = new Form1();
+
+            List<Face> faces_picked = new List<Face>();
+            List<string> name_of_roof = new List<string>();
+
+            //Group grp_Lot = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select an existing group")) as Group;
+            ///this code was use to select ceilings and explore is facing direction so they can be reproduce in rhino geometry///
+            try
+            {
+                ICollection<Reference> my_faces = uidoc.Selection.PickObjects(Autodesk.Revit.UI.Selection.ObjectType.Face, "Select ceilings to be reproduced in rhino geometry");
+                foreach (var item_myRefWall in my_faces)
+                {
+                    Element e = doc.GetElement(item_myRefWall);
+                    GeometryObject geoobj = e.GetGeometryObjectFromReference(item_myRefWall);
+                    Face face = geoobj as Face;
+                    PlanarFace planarFace = face as PlanarFace;
+                    XYZ normal = planarFace.ComputeNormal(new UV(planarFace.Origin.X, planarFace.Origin.Y));
+
+
+                    name_of_roof.Add("roof");
+                    faces_picked.Add(face);
+
+
+                    if (item_myRefWall == my_faces.ToArray().Last())
+                    {
+                        Faces_lists_excel.Add(faces_picked);
+
+                        //names.Add(name_of_roof);
+                    }
+
+                }
+            }
+            catch (Exception)
+            {
+
+                MessageBox.Show("no surfaces were selected", "Warning");
+            }
+
+
+
+
+
+            Group grpExisting = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select an existing group")) as Group;
+            GetMembersRecursive(doc, grpExisting, elemente_selected, names, numeros_);
+
+            foreach (var item in elemente_selected)
+            {
+                foreach (var item2 in item)
+                {
+                    if (!form.listBox1.Items.Contains(item2.Name))
+                    {
+                        form.listBox1.Items.Add(item2.Name);
+                    }
+                }
+            }
+
+            //Form23 form5 = new Form23();
+            //form5.ShowDialog();
+
+            //Form24 form6 = new Form24();
+            //form6.ShowDialog();
+
+
+            form.ShowDialog();
+
+            if (form.DialogResult == DialogResult.Cancel)
+            {
+                return Autodesk.Revit.UI.Result.Cancelled;
+            }
+
+            List<List<Element>> elemente_selected_to_bedeleted = new List<List<Element>>();
+            foreach (var item in elemente_selected)
+            {
+                List<Element> ele_sel = new List<Element>();
+                foreach (var item2 in item)
+                {
+                    foreach (var item3 in form.listBox2.Items)
+                    {
+                        if (item3.ToString() == item2.Name)
+                        {
+                            ele_sel.Add(item2);
+                        }
+                    }
+                }
+                elemente_selected_to_bedeleted.Add(ele_sel);
+            }
+
+            string name_of_group = names.ToArray()[0].ToArray()[0].ToString();
+            names.ToArray()[1].Insert(1, "roof" + name_of_group);
+            GetFaces(doc, elemente_selected_to_bedeleted, Faces_lists_excel);
+            GeTpoints(doc, xyz_faces, faceboundaries, Faces_lists_excel);
+            TaskDialog.Show("info faces", info);
+            //string filename = Path.Combine(Path.GetTempPath(), "Book1.xlsx"); /// this line was used to automatically look for this excel file///
+
+            string filename2 = "";
+            System.Windows.Forms.OpenFileDialog openDialog = new System.Windows.Forms.OpenFileDialog();
+            openDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            //openDialog.Filter = "Excel Files (*.xlsx) |*.xslx)"; // TODO: Change to .csv
+            if (openDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                filename2 = openDialog.FileName;
+            }
+            int numero = 0;
+            using (ExcelPackage package = new ExcelPackage(new FileInfo(filename2)))
+            {
+                package.Workbook.Worksheets.Delete(1);
+                ExcelWorksheet sheet = package.Workbook.Worksheets.Add("my_data");
+                int row = 1;
+                for (int i = 0; i < xyz_faces.ToArray().Length; i++)
+                {
+                    numero = 0;
+                    foreach (var item in xyz_faces.ToArray()[i])
+                    {
+                        if (item == null)
+                        {
+                            numero += 1;
+                            sheet.Cells[row, 1].Value = names.ToArray()[0][0];
+                            sheet.Cells[row, 2].Value = names.ToArray()[1][i + 1];
+                            sheet.Cells[row, 3].Value = numero;
+                            row++;
+                        }
+                        else
+                        {
+                            sheet.Cells[row, 1].Value = Math.Round(item.X, 1);
+                            sheet.Cells[row, 2].Value = Math.Round(item.Y, 1);
+                            sheet.Cells[row, 3].Value = Math.Round(item.Z, 1);
+                            row++;
+                        }
+
+                        if (item == xyz_faces.ToArray()[i].Last())
+                        {
+                            sheet.Cells[row, 1].Value = "Next";
+                            sheet.Cells[row, 2].Value = ".";
+                            sheet.Cells[row, 3].Value = ".";
+                            row++;
+                        }
+                    }
+                }
+                package.Save();
+            }
+            Process.Start(filename2);
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
+
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Rhino_access_faces : IExternalCommand
+    {
+
+        public static List<List<Face>> GetFaces_individual(Autodesk.Revit.DB.Document doc_, List<List<Element>> list_elements, List<List<Face>> list_faces)
+        {
+            if (list_faces == null)
+            {
+                list_faces = new List<List<Face>>();
+            }
+            for (int i = 0; i < list_elements.ToArray().Length; i++)
+            {
+                List<Face> faces_list = new List<Face>();
+                List<Element> ele = list_elements.ToArray()[i];
+
+                foreach (var item in ele)
+                {
+                    Options op = new Options();
+                    op.ComputeReferences = true;
+                    foreach (var item2 in item.get_Geometry(op).Where(q => q is Solid).Cast<Solid>())
+                    {
+                        foreach (Face item3 in item2.Faces)
+                        {
+                            PlanarFace planarFace = item3 as PlanarFace;
+                            XYZ normal = planarFace.ComputeNormal(new UV(planarFace.Origin.X, planarFace.Origin.Y));
+
+                            Element e = doc_.GetElement(item3.Reference);
+                            GeometryObject geoobj = e.GetGeometryObjectFromReference(item3.Reference);
+                            Face face = geoobj as Face;
+                            faces_list.Add(face);
+                        }
+                    }
+                }
+                if (faces_list.ToArray().Length > 0)
+                {
+                    list_faces.Add(faces_list);
+                }
+
+            }
+
+            return list_faces;
+        }
+        public static List<List<XYZ>> GeTpoints(Autodesk.Revit.DB.Document doc_, List<List<XYZ>> xyz_faces, IList<CurveLoop> faceboundaries, List<List<Face>> list_faces)
+        {
+            if (list_faces == null)
+            {
+                list_faces = new List<List<Face>>();
+            }
+
+            for (int i = 0; i < list_faces.ToArray().Length; i++)
+            {
+                List<XYZ> puntos_ = new List<XYZ>();
+                foreach (Face f in list_faces.ToArray()[i])
+                {
+
+                    faceboundaries = f.GetEdgesAsCurveLoops();//new trying to get the outline of the face instead of the edges
+                    EdgeArrayArray edgeArrays = f.EdgeLoops;
+                    foreach (CurveLoop edges in faceboundaries)
+                    {
+                        puntos_.Add(null);
+                        foreach (Autodesk.Revit.DB.Curve edge in edges)
+                        {
+                            XYZ testPoint1 = edge.GetEndPoint(1);
+                            XYZ testPoint2 = edge.GetEndPoint(0);
+                            double lenght = Math.Round(edge.ApproximateLength, 0);
+
+                            double x = Math.Round(testPoint1.X, 0);
+                            double y = Math.Round(testPoint1.Y, 0);
+                            double z = Math.Round(testPoint1.Z, 0);
+
+                            ElementClassFilter filter = new ElementClassFilter(typeof(Floor));
+                            XYZ dir = new XYZ(0, 0, 0) - testPoint1;
+
+                            //ReferenceIntersector refIntersector = new ReferenceIntersector(filter, FindReferenceTarget.Face,doc_.ActiveView as View3D);
+                            //ReferenceWithContext referenceWithContext = refIntersector.FindNearest(testPoint1 , dir);
+
+                            //Reference reference = referenceWithContext.GetReference();
+                            //XYZ intersection = reference.GlobalPoint;
+                            //XYZ newpt = new XYZ(x, y, z);
+
+                            if (!puntos_.Contains(testPoint1))
+                            {
+                                puntos_.Add(testPoint1);
+                            }
+                        }
+                    }
+                    int num = f.EdgeLoops.Size;
+                }
+                xyz_faces.Add(puntos_);
+            }
+            return xyz_faces;
+        }
+
+        static AddInId appId = new AddInId(new Guid("D031092D-29A4-4F70-8FE5-84FBD4ED0D73"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIApplication uiapp = commandData.Application;
+            UIDocument uidoc = uiapp.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+            try
+            {
+                string filename = @"T:\Transfer\lopez\Book1.xlsx";
+                using (ExcelPackage package = new ExcelPackage(new FileInfo(filename)))
+                {
+                    ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+
+                    int column = 4;
+                    int number = Convert.ToInt32(sheet.Cells[2, column].Value);
+                    sheet.Cells[2, column].Value = (number + 1); ;
+                    package.Save();
+                }
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("Excel file not found", "");
+            }
+
+            //string comments = "Createsheet" + "_" + doc.Application.Username + "_" + doc.Title;
+            //string filename = @"D:\Users\lopez\Desktop\Comments.txt";
+            ////System.Diagnostics.Process.Start(filename);
+            //StreamWriter writer = new StreamWriter(filename, true);
+            ////writer.WriteLine( Environment.NewLine);
+            //writer.WriteLine(DateTime.Now + " - " + comments);
+            //writer.Close();
+
+            List<Object> objs = new List<Object>();
+            List<List<XYZ>> xyz_faces = new List<List<XYZ>>();
+            IList<Face> face_with_regions = new List<Face>();
+            List<List<Face>> Faces_lists_excel = new List<List<Face>>();
+            //List<FaceArray> face112 = new List<FaceArray>();
+            IList<CurveLoop> faceboundaries = new List<CurveLoop>();
+            List<List<Element>> elemente_selected = new List<List<Element>>();
+            List<Face> element = new List<Face>();
+            List<Reference> my_faces = new List<Reference>();
+            List<List<string>> names = new List<List<string>>();
+            List<int> numeros_ = new List<int>();
+            XYZ pos_z = new XYZ(0, 0, 1);
+            XYZ neg_z = new XYZ(0, 0, -1);
+
+            Form1 form = new Form1();
+
+            form.ShowDialog();
+
+            if (form.DialogResult == DialogResult.Cancel)
+            {
+                return Autodesk.Revit.UI.Result.Cancelled;
+            }
+
+            if (form.checkBox1.Checked == false)
+            {
+                foreach (var item in new FilteredElementCollector(doc).OfClass(typeof(Ceiling)))
+                {
+                    if (item.Name.Contains(form.textBox1.Text))
+                    {
+                        Options op = new Options();
+                        op.ComputeReferences = true;
+                        foreach (var item2 in item.get_Geometry(op).Where(q => q is Solid).Cast<Solid>())
+                        {
+                            foreach (Face item3 in item2.Faces)
+                            {
+                                PlanarFace planarFace = item3 as PlanarFace;
+                                XYZ normal = planarFace.ComputeNormal(new UV(planarFace.Origin.X, planarFace.Origin.Y));
+
+                                Element e = doc.GetElement(item3.Reference);
+                                GeometryObject geoobj = e.GetGeometryObjectFromReference(item3.Reference);
+                                Face face = geoobj as Face;
+                                element.Add(face);
+                            }
+                        }
+
+                        //element.Clear();
+                    }
+                }
+                Faces_lists_excel.Add(element);
+            }
+            else
+            {
+                //Group grp_Lot = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select an existing group")) as Group;
+                ///this code was use to select ceilings and explore is facing direction so they can be reproduce in rhino geometry///
+                ICollection<Reference> my_faces_ = uidoc.Selection.PickObjects(Autodesk.Revit.UI.Selection.ObjectType.Face, "Select ceilings to be reproduced in rhino geometry");
+
+                foreach (var item in my_faces_)
+                {
+                    my_faces.Add(item);
+                }
+            }
+
+            List<Face> faces_picked = new List<Face>();
+            List<string> name_of_roof = new List<string>();
+
+            foreach (var item_myRefWall in my_faces)
+            {
+                Element e = doc.GetElement(item_myRefWall);
+                GeometryObject geoobj = e.GetGeometryObjectFromReference(item_myRefWall);
+                Face face = geoobj as Face;
+                PlanarFace planarFace = face as PlanarFace;
+                XYZ normal = planarFace.ComputeNormal(new UV(planarFace.Origin.X, planarFace.Origin.Y));
+
+
+                name_of_roof.Add("roof");
+                faces_picked.Add(face);
+
+
+                if (item_myRefWall == my_faces.ToArray().Last())
+                {
+                    Faces_lists_excel.Add(faces_picked);
+
+                    //names.Add(name_of_roof);
+                }
+
+            }
+
+            //names.ToArray()[1].Insert(1, "individual faces" );
+            //GetFaces_individual(doc, elemente_selected, Faces_lists_excel);
+            GeTpoints(doc, xyz_faces, faceboundaries, Faces_lists_excel);
+            TaskDialog.Show("Excel writting", "Writting faces information in a temporary excel file");
+
+            //string filename = Path.Combine(Path.GetTempPath(), "Book1.xlsx"); /// this line was used to automatically look for this excel file///
+
+            string filename2 = "";
+            System.Windows.Forms.OpenFileDialog openDialog = new System.Windows.Forms.OpenFileDialog();
+            openDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            //openDialog.Filter = "Excel Files (*.xlsx) |*.xslx)"; // TODO: Change to .csv
+            if (openDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                filename2 = openDialog.FileName;
+            }
+
+            int numero = 0;
+            using (ExcelPackage package = new ExcelPackage(new FileInfo(filename2)))
+            {
+                package.Workbook.Worksheets.Delete(1);
+                ExcelWorksheet sheet = package.Workbook.Worksheets.Add("my_data");
+                int row = 1;
+                for (int i = 0; i < xyz_faces.ToArray().Length; i++)
+                {
+                    numero = 0;
+
+                    foreach (var item in xyz_faces.ToArray()[i])
+                    {
+
+                        if (item == null)
+                        {
+                            numero += 1;
+
+                            sheet.Cells[row, 1].Value = form.textBox1.Text;
+                            sheet.Cells[row, 2].Value = form.textBox1.Text;
+                            sheet.Cells[row, 3].Value = ".";
+                            row++;
+                        }
+                        else
+                        {
+                            sheet.Cells[row, 1].Value = Math.Round(item.X, 1);
+                            sheet.Cells[row, 2].Value = Math.Round(item.Y, 1);
+                            sheet.Cells[row, 3].Value = Math.Round(item.Z, 1);
+                            row++;
+                        }
+
+                        if (item == xyz_faces.ToArray()[i].Last())
+                        {
+                            sheet.Cells[row, 1].Value = "Next";
+                            sheet.Cells[row, 2].Value = ".";
+                            sheet.Cells[row, 3].Value = ".";
+                            row++;
+                        }
+
+                    }
+
+                }
+
+                package.Save();
+            }
+
+            Process.Start(filename2);
+
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
+
+
 
     class ribbonUI : IExternalApplication
     {
@@ -1591,6 +2607,18 @@ namespace STH_Automation_22
 
             PushButton Button8 = (PushButton)panel_1.AddItem(new PushButtonData("Import View", "Import View", dll, "STH_Automation_22.Import_View_Details"));
             Button8.LargeImage = new BitmapImage(new Uri(System.IO.Path.Combine(folderPath, "sync.png"), UriKind.Absolute));
+
+            PushButton Button9 = (PushButton)panel_1.AddItem(new PushButtonData("Suneye View", "Suneye View", dll, "STH_Automation_22.Create_Sun_Eye_view"));
+            Button9.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "sun_eyes_view_2.png"), UriKind.Absolute));
+            Button9.ToolTip = "Create a isometric Revit view from sun position towards project origin";
+            Button9.LongDescription = "...";
+
+            PushButton Button10 = (PushButton)panel_1.AddItem(new PushButtonData("Family Geo Exporter", "Family Geo Exporter", dll, "STH_Automation_22.Rhino_access"));
+            Button10.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
+
+            PushButton Button11 = (PushButton)panel_1.AddItem(new PushButtonData("Family Geo Search", "Family Geo Search", dll, "STH_Automation_22.Rhino_access_faces"));
+            Button11.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
+
 
             return Autodesk.Revit.UI.Result.Succeeded;
         }
