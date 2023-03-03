@@ -2561,6 +2561,120 @@ namespace STH_Automation_22
         }
     }
 
+    public class TextTypeUpdater : IUpdater
+    {
+        static AddInId m_appId;
+        static UpdaterId m_updaterId;
+        
+
+        // constructor takes the AddInId for the add-in associated with this updater
+        public TextTypeUpdater(AddInId id)
+        {
+            m_appId = id;
+            // every Updater must have a unique ID
+            m_updaterId = new UpdaterId(m_appId, new Guid("FBFBF6B2-4C06-42d4-97C1-D1B4EB593EFF"));
+
+            
+            _failureId = new FailureDefinitionId(new Guid("A1882A5F-CE11-4302-A416-F22310F1730F"));
+
+           
+
+          
+        }
+        public void Execute(UpdaterData data)
+        {
+            Autodesk.Revit.DB.Document doc = data.GetDocument();
+
+
+            //foreach (ElementId addedElemId in data.GetAddedElementIds())
+            //{
+            //    //TextNoteType textNoteType = doc.GetElement(addedElemId) as TextNoteType;
+            //    Autodesk.Revit.DB.View textNoteType = doc.GetElement(addedElemId) as Autodesk.Revit.DB.View;
+            //    string name = textNoteType.Name;
+            //    doc.Delete(addedElemId);
+            //    //TaskDialog.Show("New Element Deleted!", "Text type '" + name + "' has been deleted. Please use existing text types in the template.");
+            //    //var paramnames =  doc.GetElement(addedElemId).Parameters;
+
+            //    //string name_ = doc.GetElement(addedElemId).LookupParameter("View Type").AsString();
+
+            //    TaskDialog.Show("!!!", "Do not forget to fill View type parameter for this view");
+            //}
+            
+           
+
+            
+
+            
+
+            foreach (ElementId addedElemId in data.GetDeletedElementIds())
+            {
+                FailureMessage failureMessage = new FailureMessage(_failureId);
+
+                failureMessage.SetFailingElement(addedElemId);
+                doc.PostFailure(failureMessage);
+                //TextNoteType textNoteType = doc.GetElement(addedElemId) as TextNoteType;
+                var textNoteType = doc.GetElement(addedElemId) /*as Autodesk.Revit.DB.View*/;
+                string name = textNoteType.Name;
+
+                //TaskDialog.Show("New Element Deleted!", "Text type '" + name + "' has been deleted. Please use existing text types in the template.");
+                //var paramnames =  doc.GetElement(addedElemId).Parameters;
+
+                //string name_ = doc.GetElement(addedElemId).LookupParameter("View Type").AsString();
+
+                TaskDialog.Show("!!!", "Do not forget to fill View type parameter for this view");
+
+            }
+        }
+        public string GetAdditionalInformation() { return "Text note type check"; }
+        public ChangePriority GetChangePriority() { return ChangePriority.FloorsRoofsStructuralWalls; }
+        public UpdaterId GetUpdaterId() { return m_updaterId; }
+        public string GetUpdaterName() { return "Text note type"; }
+    }
+
+    FailureDefinitionId _failureId = null;
+
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Register : IExternalCommand
+    {
+        static AddInId appId = new AddInId(new Guid("5F56AA78-A136-6509-AAF8-A478F3B24BAB"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+            TextTypeUpdater updater = new TextTypeUpdater(uidoc.Application.ActiveAddInId);
+            UpdaterRegistry.RegisterUpdater(updater);
+
+
+
+
+            // Trigger will occur only for TextNoteType elements
+            //ElementClassFilter textNoteTypeFilter = new ElementClassFilter(typeof(TextNoteType));
+            ElementClassFilter textNoteTypeFilter = new ElementClassFilter(typeof(Autodesk.Revit.DB.View));
+
+            // GetChangeTypeElementAddition specifies that the triggger will occur when elements are added
+            // Other options are GetChangeTypeAny, GetChangeTypeElementDeletion, GetChangeTypeGeometry, GetChangeTypeParameter
+            //UpdaterRegistry.AddTrigger(updater.GetUpdaterId(), textNoteTypeFilter, Element.GetChangeTypeElementAddition());
+            UpdaterRegistry.AddTrigger(updater.GetUpdaterId(), textNoteTypeFilter, Element.GetChangeTypeElementDeletion());
+
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class UnRegister : IExternalCommand
+    {
+        static AddInId appId = new AddInId(new Guid("6F56AA78-A136-6509-AAF8-A478F3B24BAB"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+            TextTypeUpdater updater = new TextTypeUpdater(uidoc.Application.ActiveAddInId);
+            UpdaterRegistry.UnregisterUpdater(updater.GetUpdaterId());
+
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
 
 
     class ribbonUI : IExternalApplication
@@ -2568,6 +2682,10 @@ namespace STH_Automation_22
         public static FailureDefinitionId failureDefinitionId = new FailureDefinitionId(new Guid("E7BC1F65-781D-48E8-AF37-1136B62913F5"));
         public Autodesk.Revit.UI.Result OnStartup(UIControlledApplication application)
         {
+            FailureDefinition failureDefinition
+            = FailureDefinition.CreateFailureDefinition(_failureId, FailureSeverity.Error,
+              "PreventDeletion: sorry, this element cannot be deleted.");
+
             string appdataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             string folderPath = System.IO.Path.Combine(appdataFolder, @"Autodesk\Revit\Addins\2022\STH_Automation_22\img");
             string dll = Assembly.GetExecutingAssembly().Location;
@@ -2618,6 +2736,12 @@ namespace STH_Automation_22
 
             PushButton Button11 = (PushButton)panel_1.AddItem(new PushButtonData("Family Geo Search", "Family Geo Search", dll, "STH_Automation_22.Rhino_access_faces"));
             Button11.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
+
+            PushButton Button12 = (PushButton)panel_1.AddItem(new PushButtonData("Register", "Register", dll, "STH_Automation_22.Register"));
+            Button12.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
+
+            PushButton Button13 = (PushButton)panel_1.AddItem(new PushButtonData("UnRegister", "UnRegister", dll, "STH_Automation_22.UnRegister"));
+            Button13.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
 
 
             return Autodesk.Revit.UI.Result.Succeeded;
