@@ -30,6 +30,7 @@ using System.Data.Common;
 using System.Net;
 using static Autodesk.Internal.Windows.SwfMediaPlayer;
 using System.Security.Cryptography;
+using Google.Cloud.Firestore;
 
 
 #endregion
@@ -85,7 +86,7 @@ namespace STH_Automation_22
 
             Autodesk.Revit.DB.Line axis = null;
 
-            using (Transaction tx = new Transaction(doc))
+            using (Autodesk.Revit.DB.Transaction tx = new Autodesk.Revit.DB.Transaction(doc))
             {
                 tx.Start("Create Wall Section View");
 
@@ -178,7 +179,7 @@ namespace STH_Automation_22
 
             string s = "You Picked:" + "\n";
 
-            using (Transaction tx = new Transaction(doc))
+            using (Autodesk.Revit.DB.Transaction tx = new Autodesk.Revit.DB.Transaction(doc))
             {
                 tx.Start("Set Annotation Crop size");
 
@@ -308,7 +309,7 @@ namespace STH_Automation_22
                 double angleDegreesCorrected4 = angle4 * 180 / Math.PI;
                 Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(pntEnd, XYZ.BasisZ);
 
-                using (Transaction tx = new Transaction(doc))
+                using (Autodesk.Revit.DB.Transaction tx = new Autodesk.Revit.DB.Transaction(doc))
                 {
                     tx.Start("Create Wall Section View");
 
@@ -426,7 +427,7 @@ namespace STH_Automation_22
                 double angleDegreesCorrected4 = angle4 * 180 / Math.PI;
                 Autodesk.Revit.DB.Line axis = Autodesk.Revit.DB.Line.CreateUnbound(pntEnd, XYZ.BasisZ);
 
-                using (Transaction tx = new Transaction(doc))
+                using (Autodesk.Revit.DB.Transaction tx = new Autodesk.Revit.DB.Transaction(doc))
                 {
                     tx.Start("Create Wall Section View");
                     ElevationMarker marker = ElevationMarker.CreateElevationMarker(doc, vftele.Id, pntEnd/*line.Evaluate(0.5,true)*/, 100);
@@ -559,7 +560,6 @@ namespace STH_Automation_22
             XYZ DIR = null;
             XYZ LineWallDir = null;
             XYZ DirEnd;
-            double angle3 ;
 
             TaskDialog.Show("!", "Select a Wall and an elevation");
 
@@ -638,7 +638,7 @@ namespace STH_Automation_22
             double EleMarkLineAgleToYDegrees = EleMarkLineAgleToY * 180 / Math.PI;
            
 
-            using (Transaction tx = new Transaction(doc))
+            using (Autodesk.Revit.DB.Transaction tx = new Autodesk.Revit.DB.Transaction(doc))
             {
                 tx.Start("Create Wall Section View");
 
@@ -924,7 +924,7 @@ namespace STH_Automation_22
                                                    select type;
             
 
-            string Sync_Manager = @"T:\Lopez\1.xlsx";
+            //string Sync_Manager = @"T:\Lopez\1.xlsx";
             ICollection<ElementId> selectedIds = uidoc.Selection.GetElementIds();
 
             List<ViewSection> ViewSection_ = new List<ViewSection>();
@@ -941,7 +941,7 @@ namespace STH_Automation_22
 
                 if (doc_.Title != doc.Title)
                 {
-                    using (Transaction tx2 = new Transaction(doc_))
+                    using (Autodesk.Revit.DB.Transaction tx2 = new Autodesk.Revit.DB.Transaction(doc_))
                     {
                         tx2.Start("STH sheet copy");
                         foreach (ElementId selectedid in selectedIds)
@@ -1084,7 +1084,7 @@ namespace STH_Automation_22
                             }
                         }
                         tx2.Commit();
-                        using (Transaction tx3 = new Transaction(doc_))
+                        using (Autodesk.Revit.DB.Transaction tx3 = new Autodesk.Revit.DB.Transaction(doc_))
                         {
                             tx3.Start("STH sheet copy");
                             foreach (var sheet2 in ViewSheet_)
@@ -1157,7 +1157,7 @@ namespace STH_Automation_22
                 sectionBox.Min = new XYZ((double)sheet.Cells[3, 1].Value, (double)sheet.Cells[3, 2].Value, (double)sheet.Cells[3, 3].Value);
                 sectionBox.Max = new XYZ((double)sheet.Cells[3, 4].Value, (double)sheet.Cells[3, 5].Value, (double)sheet.Cells[3, 6].Value);
 
-                using (Transaction tx2 = new Transaction(doc))
+                using (Autodesk.Revit.DB.Transaction tx2 = new Autodesk.Revit.DB.Transaction(doc))
                 {
                     tx2.Start("Create Wall Section View");
 
@@ -1225,7 +1225,6 @@ namespace STH_Automation_22
             return xyz_faces;
         }
         
-
         public static ModelLine Makeline(Autodesk.Revit.DB.Document doc, XYZ pta, XYZ ptb)
         {
             ModelLine modelLine = null;
@@ -1450,7 +1449,7 @@ namespace STH_Automation_22
            
 
             ViewOrientation3D viewOrientation3D;
-            using (Transaction tr1 = new Transaction(doc))
+            using (Autodesk.Revit.DB.Transaction tr1 = new Autodesk.Revit.DB.Transaction(doc))
             {
             
                 tr1.Start("Place vs in sheet");
@@ -1532,11 +1531,38 @@ namespace STH_Automation_22
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class Sync_Manager : IExternalCommand
     {
-        static AddInId appId = new AddInId(new Guid("6C22CC72-A167-4819-AAF1-A178F6B44BAB"));
+        //static AddInId appId = new AddInId(new Guid("6C22CC72-A167-4819-AAF1-A178F6B44BAB"));
         static public Autodesk.Revit.ApplicationServices.Application m_app;
         public float abort = 0;
+
+
+        public void Add_Document_with_AustoID()
+        {
+            string appdataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string folderPath2 = System.IO.Path.Combine(appdataFolder, @"Autodesk\Revit\Addins\2022\STH_Automation_22\");
+            string path = /*ppDomain.CurrentDomain.BaseDirectory*/folderPath2 + @"revit-api-test-firebase.json";
+            Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
+            FirestoreDb db = FirestoreDb.Create("revit - api - test");
+           
+
+            CollectionReference cool = db.Collection("Add_Document_with_AustoID");
+            Dictionary<string, object> data1 = new Dictionary<string, object>()
+            {
+                { "First name","tacv"},
+                { "Lastname","Alexitico"},
+                { "age ","8"}
+            };
+            cool.AddAsync(data1);
+            MessageBox.Show("data added successfully");
+        }
+
+
         public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
         {
+
+
+            Add_Document_with_AustoID();
+
             UIDocument uidoc = commandData.Application.ActiveUIDocument;
             Autodesk.Revit.DB.Document doc = uidoc.Document;
 
@@ -2565,7 +2591,7 @@ namespace STH_Automation_22
     {
         static AddInId m_appId;
         static UpdaterId m_updaterId;
-        
+        FailureDefinitionId _failureId = null;
 
         // constructor takes the AddInId for the add-in associated with this updater
         public TextTypeUpdater(AddInId id)
@@ -2577,9 +2603,11 @@ namespace STH_Automation_22
             
             _failureId = new FailureDefinitionId(new Guid("A1882A5F-CE11-4302-A416-F22310F1730F"));
 
-           
+            FailureDefinition failureDefinition
+             = FailureDefinition.CreateFailureDefinition(_failureId, FailureSeverity.Error,
+               "PreventDeletion: sorry, this element cannot be deleted.");
 
-          
+
         }
         public void Execute(UpdaterData data)
         {
@@ -2601,11 +2629,6 @@ namespace STH_Automation_22
             //}
             
            
-
-            
-
-            
-
             foreach (ElementId addedElemId in data.GetDeletedElementIds())
             {
                 FailureMessage failureMessage = new FailureMessage(_failureId);
@@ -2631,7 +2654,7 @@ namespace STH_Automation_22
         public string GetUpdaterName() { return "Text note type"; }
     }
 
-    FailureDefinitionId _failureId = null;
+    
 
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class Register : IExternalCommand
@@ -2676,20 +2699,69 @@ namespace STH_Automation_22
         }
     }
 
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Data_base_Rego : IExternalCommand
+    {
+        public FirestoreDb datab_()
+        {
+            string appdataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string folderPath2 = System.IO.Path.Combine(appdataFolder, @"Autodesk\Revit\Addins\2022\STH_Automation_22\");
+            string path = /*ppDomain.CurrentDomain.BaseDirectory*/folderPath2 + @"revit-api-test-firebase.json";
+            Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
+            FirestoreDb db = FirestoreDb.Create("revit-api-test");
+            return db;
+        }
+
+
+        public void Add_Document_with_AustoID(FirestoreDb db)
+        {
+
+            CollectionReference cool = db.Collection(/*"Add_Document_with_AustoID"*/"Sync Manager");
+            Dictionary<string, object> data1 = new Dictionary<string, object>()
+            {
+                { "STH Project","Ryde Hospital"},
+                { "User Sync","Grant Larson"},
+                { "Time","6/03/2023 11:19:37 AM"}
+            };
+            cool.AddAsync(data1);
+            MessageBox.Show("data added successfully");
+        }
+        async void getAllData(FirestoreDb db)
+        {
+            DocumentReference docRef = db.Collection("Sync Manager").Document("Ryde Hospital");
+            DocumentSnapshot snap = await docRef.GetSnapshotAsync();
+            Dictionary<string, object> data2 = snap.ToDictionary();
+
+        }
+
+
+        static AddInId appId = new AddInId(new Guid("7F56AA78-A136-6509-AAF8-A478F3B24BAB"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+
+            FirestoreDb db = datab_();
+            //Add_Document_with_AustoID();
+
+            getAllData(db);
+
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
 
     class ribbonUI : IExternalApplication
     {
         public static FailureDefinitionId failureDefinitionId = new FailureDefinitionId(new Guid("E7BC1F65-781D-48E8-AF37-1136B62913F5"));
         public Autodesk.Revit.UI.Result OnStartup(UIControlledApplication application)
         {
-            FailureDefinition failureDefinition
-            = FailureDefinition.CreateFailureDefinition(_failureId, FailureSeverity.Error,
-              "PreventDeletion: sorry, this element cannot be deleted.");
 
             string appdataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             string folderPath = System.IO.Path.Combine(appdataFolder, @"Autodesk\Revit\Addins\2022\STH_Automation_22\img");
             string dll = Assembly.GetExecutingAssembly().Location;
             string myRibbon_1 = "Test Tools";
+
+            
 
             application.CreateRibbonTab(myRibbon_1);
             RibbonPanel panel_1 = application.CreateRibbonPanel(myRibbon_1, "STH");
@@ -2742,6 +2814,9 @@ namespace STH_Automation_22
 
             PushButton Button13 = (PushButton)panel_1.AddItem(new PushButtonData("UnRegister", "UnRegister", dll, "STH_Automation_22.UnRegister"));
             Button13.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
+
+            PushButton Button14 = (PushButton)panel_1.AddItem(new PushButtonData("Data base Rego", "Data base Rego", dll, "STH_Automation_22.Data_base_Rego"));
+            Button14.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
 
 
             return Autodesk.Revit.UI.Result.Succeeded;

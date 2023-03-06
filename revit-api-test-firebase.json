@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "revit-api-test",
+  "private_key_id": "35443ca2a39c127a95c87d6f2656034ead870c06",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCHYLhdOIwLbJC/\nZBdSBUm88zrOSjwomI5qGJ3b1WMhszGH9+wjORJo89uJgwah0zFYqpmwhk2BGYsi\nh3ERyY0NZ6FvYgssQCx+PHCsw0DX2CeTQYyQAFmfwFTcZSZzpR+5l4ZMcidKhD6e\nTgjwmyIMSjpZ4ZFc/e+YsOtgqOkcc95ooxtoP5iFQIDF8c5y+5f9pDzpiA4ap/gb\nn6TGhYR0BOrppJYWaEYnAJxaj4NJCdcR0+6IEVwjzHKk22vmXK/pDH/jm9eaixt0\nbE3qGQDU9uZdwOGHR5edFD0+KWGnNltddEdgQlj1pzdkvvj0iXLyYO1HxYunbg84\n9nCshb9lAgMBAAECggEAEchGH1ScrKl7j/BVUdxI9c1bRZqhsVFsr4oBPk2Wwmf3\n0xzhQzUtcmTJyxPPbLVBj5yFKJdTmeghiw0QcJ4xbXfV0DwoLI1XatOEl2TkYRXP\nCPw8uvOY0i+g1fxhYyJm+ulo5iS+fX7GfOPSL8yo2cVsSb8j6Xufm8ZtfJpjWG28\n+JG3KzaJAT/+E3zNjuADgiMWqOYFcJas6x+n42xpfbVq1MyK2eC+2FNwMCltfByq\njWPkv/AntjzMH8MPHXXu9JsOFw/khyWJf8/XHJCwErp1GnvQbHjyyBUccLNjyHeZ\n+nMtWAeVtPhzlw5Ie66mhjlL0kKB0LLKesY2aKVrdwKBgQC9dBJaS3NM79Avlfj3\n1SkLD/RHpZ81Dk7Cfvl7HXxXlliGBm882rw35Wa3SNJ9sYVo5k7Mpy8FRqk+Bo/x\nxjFteyWHM5+VbxN9e6BJ0pSOyNEhY016f4ybUrNSz33t19Fj1mnThxWYgX4482n0\nkklSqpvQH1CAKiiuSFRdBEY8NwKBgQC27heFJdjiAVQWBi3FTbxawYIyfw2b37GA\nYRx9dbLzy4VkNkVBA4nlGL9dRHufnnEYggPIU8t3XuYzuXSBHQ9WhCVe8/8vW/ui\nguuKZEb5C7r0k2kwsLSwOD3Wy8FAOAf6Rti8lNqQSpTliXBFWPuthmOG8xFQ6+xS\nok/vUk9rQwKBgFOvcu/pxiuk/uwWLhyjTvbw/DGtyi6wfD/TwLYOZz91TPMe4oIa\nCOwT7BRoGXqmMM0Odp5V9yI4fUfFtE3TA0BeFkyrlAF5SD20nzAc0bxknmRGLhI/\nR0fQ9x9MQk8OdxLHwoVKdVKhWLUlaJc9CyB19k+vlWqXtNKPZpyT58ZvAoGAYCcm\nFcafCazJFgqJZHxH1SyB0ykVbilWk7R31TpYpe0EYHhmTpYdlV48uDmXAX+20rsE\nYfgpqsUnG2kP5A3yUfeD7TUznSEsU2+df1DWPXH9AzG4yO8ZCseFObJAEhFhoBw9\nMGLNv6p0OXLUoJ71K3DIP9bj8zUPMyA+A/2v4SECgYBQhw2QdYXo3pz8MEOJga5d\ng/9sZN59shqTeIFlmT59/Ug72y/cPakWh4P3lACajaytpp5SPVBMB8AcVvLeRs04\nSt60BXNVVDTWouffGkE4Sm8cx9fzNFm606Z6rog0EUO1lvTZuB6N7+VFT8qkGt0u\nOaqnEG6lkJGBPrhwqkQTpA==\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-a7blt@revit-api-test.iam.gserviceaccount.com",
+  "client_id": "110435895551008407445",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-a7blt%40revit-api-test.iam.gserviceaccount.com"
+}
