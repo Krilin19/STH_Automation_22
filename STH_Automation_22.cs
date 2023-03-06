@@ -2726,12 +2726,48 @@ namespace STH_Automation_22
             cool.AddAsync(data1);
             MessageBox.Show("data added successfully");
         }
+
+        public void Add_Document_with_CustomsID(FirestoreDb db, Autodesk.Revit.DB.Document doc)
+        {
+
+            DocumentReference docdb = db.Collection("Sync Manager 2").Document(doc.Title);
+            string user = doc.Application.Username;
+            var lastSaveTime = DateTime.Now;
+            var CheckTime = DateTime.Now;
+
+            Dictionary<string, object> data1 = new Dictionary<string, object>()
+            {
+                
+
+                { "Waiting state", "false"},
+                { "User Sync", user.ToString()},
+                { "Time",DateTime.Now.ToString()}
+            };
+            docdb.SetAsync(data1);
+            //MessageBox.Show("data added successfully");
+        }
+
         async void getAllData(FirestoreDb db)
         {
             DocumentReference docRef = db.Collection("Sync Manager").Document("Ryde Hospital");
             DocumentSnapshot snap = await docRef.GetSnapshotAsync();
             Dictionary<string, object> data2 = snap.ToDictionary();
+        }
 
+
+        async void All_Documunets_FromACollection(FirestoreDb db)
+        {
+            Query docRef = db.Collection("Sync Manager");
+            QuerySnapshot snap = await docRef.GetSnapshotAsync();
+            string s = "You Picked:" + "\n";
+            foreach (DocumentSnapshot project in snap)
+            {
+                Dictionary<string, object> data2 = project.ToDictionary();
+                s += " Doc Id = " + project.Id + "\n";
+                s += " coll = " + data2.Keys + " = " + data2.Values +  "\n";
+
+            }
+            TaskDialog.Show("Basic Element Info", s);
         }
 
 
@@ -2740,11 +2776,17 @@ namespace STH_Automation_22
         {
             UIDocument uidoc = commandData.Application.ActiveUIDocument;
             Autodesk.Revit.DB.Document doc = uidoc.Document;
-
+            
             FirestoreDb db = datab_();
+
             //Add_Document_with_AustoID();
 
-            getAllData(db);
+            //getAllData(db);
+
+            //All_Documunets_FromACollection(db);
+
+            Add_Document_with_CustomsID(db, doc);
+
 
             return Autodesk.Revit.UI.Result.Succeeded;
         }
