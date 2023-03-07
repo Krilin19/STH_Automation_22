@@ -1557,27 +1557,50 @@ namespace STH_Automation_22
                 { "Waiting", true }
             };
             cool.AddAsync(data1);
-            MessageBox.Show("data added successfully");
+            //MessageBox.Show("data added successfully");
         }
         async void All_Documunets_FromACollection(FirestoreDb db)
         {
-            Query docRef = db.Collection("Sync Manager");
+            Query docRef = db.Collection("Sync Manager").OrderBy("Time");
             QuerySnapshot snap = await docRef.GetSnapshotAsync();
-            string s = "Waiting to sync:" + "\n";
 
-            
+            string s = "Waiting to sync:" + "\n";
             foreach (DocumentSnapshot project in snap)
             {
                 if (project.Exists)
                 {
+                    s += " DocUment Id = " + project.Id + "\n";
                     Dictionary<string, object> data2 = project.ToDictionary();
 
                     foreach (var item in data2)
                     {
-                        s += " Doc Id = " + project.Id + "\n";
-                        s += " coll = " + String.Format("{0}:{1} \n", item.Key, item.Value);
+                        if (item.Key.ToString() == "Waiting")
+                        {
+                            s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
+                        }
                     }
-                    
+                    foreach (var item in data2)
+                    {
+                        if (item.Key.ToString() == "User Sync")
+                        {
+                            s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
+                        }
+                    }
+                    foreach (var item in data2)
+                    {
+                        if (item.Key.ToString() == "Time")
+                        {
+                            s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
+                        }
+                    }
+                    foreach (var item in data2)
+                    {
+                        if (item.Key.ToString() == "STH Project")
+                        {
+                            s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
+                        }
+                    }
+                    s += "\n";
                 }
             }
             TaskDialog.Show("Basic Element Info", s);
@@ -3085,7 +3108,6 @@ namespace STH_Automation_22
             cool.AddAsync(data1);
             MessageBox.Show("data added successfully");
         }
-
         public void Add_Document_with_CustomsID(FirestoreDb db, Autodesk.Revit.DB.Document doc)
         {
 
@@ -3102,16 +3124,19 @@ namespace STH_Automation_22
             docdb.SetAsync(data1);
             //MessageBox.Show("data added successfully");
         }
+
         async void getAllData(FirestoreDb db)
         {
             DocumentReference docRef = db.Collection("Sync Manager").Document("Ryde Hospital");
             DocumentSnapshot snap = await docRef.GetSnapshotAsync();
             Dictionary<string, object> data2 = snap.ToDictionary();
         }
+
         async void All_Documunets_FromACollection(FirestoreDb db)
         {
             Query docRef = db.Collection("Sync Manager").OrderBy("Time");
             QuerySnapshot snap = await docRef.GetSnapshotAsync();
+            
             string s = "Waiting to sync:" + "\n";
             foreach (DocumentSnapshot project in snap)
             {
@@ -3119,14 +3144,41 @@ namespace STH_Automation_22
                 {
                     s += " DocUment Id = " + project.Id + "\n";
                     Dictionary<string, object> data2 = project.ToDictionary();
+
                     foreach (var item in data2)
                     {
-                        s += String.Format("{0}:{1} \n", item.Key, item.Value);
+                        if (item.Key.ToString() == "Waiting")
+                        {
+                            s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
+                        }
                     }
+                    foreach (var item in data2)
+                    {
+                        if (item.Key.ToString() == "User Sync")
+                        {
+                            s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
+                        }
+                    }
+                    foreach (var item in data2)
+                    {
+                        if (item.Key.ToString() == "Time")
+                        {
+                            s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
+                        }
+                    }
+                    foreach (var item in data2)
+                    {
+                        if (item.Key.ToString() == "STH Project")
+                        {
+                            s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
+                        }
+                    }
+                    s += "\n";
                 }
             }
             TaskDialog.Show("Basic Element Info", s);
         }
+
 
         static AddInId appId = new AddInId(new Guid("7F56AA78-A136-6509-AAF8-A478F3B24BAB"));
         public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
@@ -3135,7 +3187,7 @@ namespace STH_Automation_22
             Autodesk.Revit.DB.Document doc = uidoc.Document;
             FirestoreDb db = datab_();
 
-            //Add_Document_with_AustoID(db, doc);
+            Add_Document_with_AustoID(db, doc);
             //Add_Document_with_CustomsID(db, doc);
 
             All_Documunets_FromACollection(db);
@@ -3144,7 +3196,43 @@ namespace STH_Automation_22
             return Autodesk.Revit.UI.Result.Succeeded;
         }
     }
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class Data_base_Delete : IExternalCommand
+    {
+        public FirestoreDb datab_()
+        {
+            string appdataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string folderPath2 = System.IO.Path.Combine(appdataFolder, @"Autodesk\Revit\Addins\2022\STH_Automation_22\");
+            string path = /*ppDomain.CurrentDomain.BaseDirectory*/folderPath2 + @"revit-api-test-firebase.json";
+            Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
+            FirestoreDb db = FirestoreDb.Create("revit-api-test");
+            return db;
+        }
 
+        async void DeleteDocument(FirestoreDb db)
+        {
+            //DocumentReference docref = db.Collection("Sync Manager").Document("hola");
+            Query docRef = db.Collection("Sync Manager").OrderByDescending("Time") /*.OrderBy("Time")*/;
+            
+            QuerySnapshot snap = await docRef.GetSnapshotAsync();
+
+            List<DocumentSnapshot> docref = snap.ToList();
+            docref.Reverse();
+            await docref.ToArray()[0].Reference.DeleteAsync();
+        }
+
+        static AddInId appId = new AddInId(new Guid("8F56AA78-A136-6509-AAF8-A478F3B24BAB"));
+        public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
+        {
+            UIDocument uidoc = commandData.Application.ActiveUIDocument;
+            Autodesk.Revit.DB.Document doc = uidoc.Document;
+            FirestoreDb db = datab_();
+
+            DeleteDocument(db);
+
+            return Autodesk.Revit.UI.Result.Succeeded;
+        }
+    }
     class ribbonUI : IExternalApplication
     {
         public static FailureDefinitionId failureDefinitionId = new FailureDefinitionId(new Guid("E7BC1F65-781D-48E8-AF37-1136B62913F5"));
@@ -3207,8 +3295,11 @@ namespace STH_Automation_22
             PushButton Button13 = (PushButton)panel_1.AddItem(new PushButtonData("UnRegister", "UnRegister", dll, "STH_Automation_22.UnRegister"));
             Button13.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
 
-            PushButton Button14 = (PushButton)panel_1.AddItem(new PushButtonData("Data base Rego", "Data base Rego", dll, "STH_Automation_22.Data_base_Rego"));
+            PushButton Button14 = (PushButton)panel_1.AddItem(new PushButtonData("DB ADD", "DB ADD", dll, "STH_Automation_22.Data_base_Rego"));
             Button14.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
+
+            PushButton Button15 = (PushButton)panel_1.AddItem(new PushButtonData("DB Delete", "DB Delete", dll, "STH_Automation_22.Data_base_Delete"));
+            Button15.LargeImage = new BitmapImage(new Uri(Path.Combine(folderPath, "rhinoexport_32.png"), UriKind.Absolute));
 
 
             return Autodesk.Revit.UI.Result.Succeeded;
