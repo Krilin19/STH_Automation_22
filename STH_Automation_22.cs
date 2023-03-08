@@ -31,6 +31,8 @@ using System.Net;
 using static Autodesk.Internal.Windows.SwfMediaPlayer;
 using System.Security.Cryptography;
 using Google.Cloud.Firestore;
+using Google.Type;
+using Autodesk.Revit.DB.Events;
 
 
 #endregion
@@ -1557,6 +1559,21 @@ namespace STH_Automation_22
             FirestoreDb db = FirestoreDb.Create("revit-api-test");
             return db;
         }
+
+        public void Sync_func(Autodesk.Revit.DB.Document doc)
+        {
+            TransactWithCentralOptions transact = new TransactWithCentralOptions();
+            SynchronizeWithCentralOptions synch = new SynchronizeWithCentralOptions();
+            //synch.Comment = "Autosaved by the API at " + DateTime.Now;
+            RelinquishOptions relinquishOptions = new RelinquishOptions(true);
+            relinquishOptions.CheckedOutElements = true;
+            synch.SetRelinquishOptions(relinquishOptions);
+
+            //uiApp.Application.WriteJournalComment("AutoSave To Central", true);
+            doc.SynchronizeWithCentral(transact, synch);
+        }
+
+
         public void Add_Document_with_AustoID(FirestoreDb db, Autodesk.Revit.DB.Document doc)
         {
             CollectionReference cool = db.Collection("Sync Manager");
@@ -1566,7 +1583,7 @@ namespace STH_Automation_22
             {
                 { "STH Project",doc.Title},
                 { "User Sync",user.ToString()},
-                { "Time", DateTime.Now.ToString()},
+                { "Time", System.DateTime.Now.ToString()},
                 { "Waiting", true }
             };
             cool.AddAsync(data1);
@@ -1576,9 +1593,8 @@ namespace STH_Automation_22
         {
             Query docRef = db.Collection("Sync Manager").OrderBy("Time");
             QuerySnapshot snap = await docRef.GetSnapshotAsync();
-            bool finished_ = docRef.GetSnapshotAsync().IsCanceled;
-            
 
+            Dictionary<string, object> data = null;
             string s = "Waiting to sync:" + "\n";
             if (snap.Count() != 0)
             {
@@ -1586,16 +1602,21 @@ namespace STH_Automation_22
                 {
                     if (project.Exists)
                     {
-                        s += "- Document Id = " + project.Id + "\n";
+                        data = project.ToDictionary();
+                    }
+                }
+                var last = data.ToArray().Last().Value;
+                if (last.ToString() == doc.Application.Username)
+                {
+                    return;
+                }
+
+                foreach (DocumentSnapshot project in snap)
+                {
+                    if (project.Exists)
+                    {
                         Dictionary<string, object> data2 = project.ToDictionary();
 
-                        foreach (var item in data2)
-                        {
-                            if (item.Key.ToString() == "Waiting")
-                            {
-                                s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
-                            }
-                        }
                         foreach (var item in data2)
                         {
                             if (item.Key.ToString() == "User Sync")
@@ -1606,13 +1627,6 @@ namespace STH_Automation_22
                         foreach (var item in data2)
                         {
                             if (item.Key.ToString() == "Time")
-                            {
-                                s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
-                            }
-                        }
-                        foreach (var item in data2)
-                        {
-                            if (item.Key.ToString() == "STH Project")
                             {
                                 s += item.Key.ToString() + " = " + item.Value.ToString() + "\n";
                             }
@@ -1630,15 +1644,7 @@ namespace STH_Automation_22
             }
             TaskDialog.Show("Basic Element Info", s);
 
-            TransactWithCentralOptions transact = new TransactWithCentralOptions();
-            SynchronizeWithCentralOptions synch = new SynchronizeWithCentralOptions();
-            //synch.Comment = "Autosaved by the API at " + DateTime.Now;
-            RelinquishOptions relinquishOptions = new RelinquishOptions(true);
-            relinquishOptions.CheckedOutElements = true;
-            synch.SetRelinquishOptions(relinquishOptions);
-
-            //uiApp.Application.WriteJournalComment("AutoSave To Central", true);
-            doc.SynchronizeWithCentral(transact, synch);
+            Sync_func(doc);
 
             DeleteDocument(db);
         }
@@ -1660,15 +1666,27 @@ namespace STH_Automation_22
             if (doc.Title == "RAC_basic_sample_project"  /*"RHR_BUILDING_A22"*/)
             {
                 string user = doc.Application.Username;
-                var lastSaveTime = DateTime.Now;
-                var CheckTime = DateTime.Now;
+                var lastSaveTime = System.DateTime.Now;
+                var CheckTime = System.DateTime.Now;
                 FirestoreDb db = datab_();
 
                 All_Documunets_FromACollection(db, doc);
 
-
-
-
+                DocumentReference docRef = db.Collection("cities").Document("SF");
+                FirestoreChangeListener listener = docRef.Listen(snapshot =>
+                {
+                    Console.WriteLine("Callback received document snapshot.");
+                    Console.WriteLine("Document exists? {0}", snapshot.Exists);
+                    if (snapshot.Exists)
+                    {
+                        Console.WriteLine("Document data for {0} document:", snapshot.Id);
+                        Dictionary<string, object> city = snapshot.ToDictionary();
+                        foreach (KeyValuePair<string, object> pair in city)
+                        {
+                            Console.WriteLine("{0}: {1}", pair.Key, pair.Value);
+                        }
+                    }
+                });
             }
             else
             {
@@ -1678,6 +1696,9 @@ namespace STH_Automation_22
             return Autodesk.Revit.UI.Result.Succeeded;
         }
     }
+
+
+
 
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class Rhino_access : IExternalCommand
@@ -2334,6 +2355,7 @@ namespace STH_Automation_22
     }
 
 
+
     public class TextTypeUpdater : IUpdater
     {
         static AddInId m_appId;
@@ -2475,8 +2497,8 @@ namespace STH_Automation_22
             {
 
                 string user = doc.Application.Username;
-                var lastSaveTime = DateTime.Now;
-                var CheckTime = DateTime.Now;
+                var lastSaveTime = System.DateTime.Now;
+                var CheckTime = System.DateTime.Now;
 
             beggining:
                 string Sync_Manager = @"T:\Lopez\Sync_Manager.xlsx";
@@ -2499,7 +2521,7 @@ namespace STH_Automation_22
                     using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
                     {
                         ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
-                        var Time_ = DateTime.Now;
+                        var Time_ = System.DateTime.Now;
 
                         if (sheet.Cells[1, 2].Value != null)
                         {
@@ -2624,11 +2646,11 @@ namespace STH_Automation_22
                                 var Value1 = sheet.Cells[row, 1].Value;
                                 var Value2 = sheet.Cells[row, 2].Value;
 
-                                if (lastSaveTime == DateTime.MinValue)
+                                if (lastSaveTime == System.DateTime.MinValue)
                                 {
-                                    lastSaveTime = DateTime.Now;
+                                    lastSaveTime = System.DateTime.Now;
                                 }
-                                DateTime now = DateTime.Now;
+                                System.DateTime now = System.DateTime.Now;
                                 TimeSpan elapsedTime = now.Subtract(lastSaveTime);
                                 double minutes = elapsedTime.Minutes;
                                 if (minutes > 2)
@@ -2679,11 +2701,11 @@ namespace STH_Automation_22
                 while (true)
                 {
 
-                    if (CheckTime == DateTime.MinValue)
+                    if (CheckTime == System.DateTime.MinValue)
                     {
-                        CheckTime = DateTime.Now;
+                        CheckTime = System.DateTime.Now;
                     }
-                    DateTime nowTocheck = DateTime.Now;
+                    System.DateTime nowTocheck = System.DateTime.Now;
 
                     TimeSpan elapsedTimeToCheck = nowTocheck.Subtract(CheckTime);
                     double minutestoCheck = elapsedTimeToCheck.TotalSeconds;
@@ -2696,7 +2718,7 @@ namespace STH_Automation_22
 
                     if (minutestoCheck > 10.0)
                     {
-                        CheckTime = DateTime.Now;
+                        CheckTime = System.DateTime.Now;
                         try
                         {
                             using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
@@ -2716,11 +2738,11 @@ namespace STH_Automation_22
                                         var Value1 = sheet.Cells[row, 1].Value;
                                         var Value2 = sheet.Cells[row, 2].Value;
 
-                                        if (lastSaveTime == DateTime.MinValue)
+                                        if (lastSaveTime == System.DateTime.MinValue)
                                         {
-                                            lastSaveTime = DateTime.Now;
+                                            lastSaveTime = System.DateTime.Now;
                                         }
-                                        DateTime now = DateTime.Now;
+                                        System.DateTime now = System.DateTime.Now;
                                         TimeSpan elapsedTime = now.Subtract(lastSaveTime);
                                         double minutes = elapsedTime.Minutes;
                                         if (minutes > 10)
@@ -2843,7 +2865,7 @@ namespace STH_Automation_22
             {
                 { "STH Project",doc.Title},
                 { "User Sync",user.ToString()},
-                { "Time", DateTime.Now.ToString()},
+                { "Time", System.DateTime.Now.ToString()},
                 { "Waiting", true }
             };
             cool.AddAsync(data1);
@@ -2851,23 +2873,17 @@ namespace STH_Automation_22
         }
         public void Add_Document_with_CustomsID(FirestoreDb db, Autodesk.Revit.DB.Document doc)
         {
-
             DocumentReference docdb = db.Collection("Sync Manager 2").Document(doc.Title);
             string user = doc.Application.Username;
-           
-
             Dictionary<string, object> data1 = new Dictionary<string, object>()
             {
                 { "Waiting state", "false"},
                 { "User Sync", user.ToString()},
-                { "Time",DateTime.Now.ToString()}
+                { "Time", System.DateTime.Now.ToString()}
             };
             docdb.SetAsync(data1);
             //MessageBox.Show("data added successfully");
         }
-
-        
-
         static AddInId appId = new AddInId(new Guid("7F56AA78-A136-6509-AAF8-A478F3B24BAB"));
         public Autodesk.Revit.UI.Result Execute(ExternalCommandData commandData, ref string message, ElementSet elementSet)
         {
@@ -2998,6 +3014,241 @@ namespace STH_Automation_22
     }
 
 
+    public static class myCommand
+    {
+
+        async static void DeleteDocument(FirestoreDb db)
+        {
+            //DocumentReference docref = db.Collection("Sync Manager").Document("hola");
+            Query docRef = db.Collection("Sync Manager").OrderByDescending("Time") /*.OrderBy("Time")*/;
+
+            QuerySnapshot snap = await docRef.GetSnapshotAsync();
+
+            List<DocumentSnapshot> docref = snap.ToList();
+            docref.Reverse();
+            await docref.ToArray()[0].Reference.DeleteAsync();
+        }
+
+        public static FirestoreDb datab_()
+        {
+            string appdataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string folderPath2 = System.IO.Path.Combine(appdataFolder, @"Autodesk\Revit\Addins\2022\STH_Automation_22\");
+            string path = /*ppDomain.CurrentDomain.BaseDirectory*/folderPath2 + @"revit-api-test-firebase.json";
+            Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
+            FirestoreDb db = FirestoreDb.Create("revit-api-test");
+            return db;
+        }
+
+        public static void Add_Document_with_AustoID(FirestoreDb db, Autodesk.Revit.DB.Document doc)
+        {
+            CollectionReference cool = db.Collection("Sync Manager");
+            string user = doc.Application.Username;
+
+            Dictionary<string, object> data1 = new Dictionary<string, object>()
+            {
+                { "STH Project",doc.Title},
+                { "User Sync",user.ToString()},
+                { "Time", System.DateTime.Now.ToString()},
+                { "Waiting", true }
+            };
+            cool.AddAsync(data1);
+            //MessageBox.Show("data added successfully");
+        }
+        public static void Add_Document_with_CustomsID(FirestoreDb db, Autodesk.Revit.DB.Document doc)
+        {
+            DocumentReference docdb = db.Collection("Sync Manager 2").Document(doc.Title);
+            string user = doc.Application.Username;
+            Dictionary<string, object> data1 = new Dictionary<string, object>()
+            {
+                { "Waiting state", "false"},
+                { "User Sync", user.ToString()},
+                { "Time", System.DateTime.Now.ToString()}
+            };
+            docdb.SetAsync(data1);
+            //MessageBox.Show("data added successfully");
+        }
+
+
+        static System.DateTime lastSaveTime;
+        public static void myDocumentSaving(object sender, DocumentSynchronizingWithCentralEventArgs args)
+        {
+            FirestoreDb db = datab_();
+
+            Add_Document_with_AustoID(db, args.Document);
+            //    double reset = 10000000;
+            //    SyncListUpdater SyncListUpdater_ = new SyncListUpdater();
+
+            //    string user = args.Document.Application.Username;
+
+            //    string s = "People syncing:" + "\n";
+            //    try
+            //    {
+            //        string Sync_Manager = @"T:\Lopez\Sync_Manager.xlsx";
+            //        using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+            //        {
+            //            ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+            //            var Time_ = System.DateTime.Now;
+            //            //---------------------------------------------------------
+            //            for (int row = 1; row < 20; row++)
+            //            {
+            //                if (sheet.Cells[row, 1].Value == null)
+            //                {
+            //                    break;
+            //                }
+            //                if (sheet.Cells[row, 1].Value != null)
+            //                {
+            //                    var Value1 = sheet.Cells[row, 1].Value;
+            //                    var Value2 = sheet.Cells[row, 2].Value;
+
+            //                    SyncListUpdater_.listBox1.Items.Add(Value1 + " + " + Value2.ToString() + "\n");
+            //                }
+
+            //            }
+
+            //            SyncListUpdater_.Show();
+
+            //            if (sheet.Cells[1, 1].Value == null)
+            //            {
+            //                sheet.Cells[1, 1].Value = Time_.ToString();
+            //                sheet.Cells[1, 2].Value = user;
+            //                package.Save();
+            //                goto finish_;
+            //            }
+            //            //---------------------------------------------------------
+            //            if (sheet.Cells[1, 2].Value.ToString() != "Alex synced")
+            //            {
+            //                for (int row = 1; row < 9999; row++)
+            //                {
+            //                    var thisValue = sheet.Cells[row, 1].Value;
+
+            //                    if (thisValue == null)
+            //                    {
+            //                        sheet.Cells[row, 1].Value = Time_.ToString();
+            //                        sheet.Cells[row, 2].Value = user;
+            //                        package.Save();
+            //                        goto finder;
+            //                    }
+            //                    else
+            //                    {
+
+
+            //                    }
+            //                }
+            //            }
+            //        }
+            //    }
+            //    catch (Exception)
+            //    {
+            //        MessageBox.Show("Excel file not found", "");
+            //        args.Cancel();
+            //    }
+            //finder:
+            //    for (int i = 0; i < reset; i++)
+            //    {
+            //        if (i == 9999999)
+            //        {
+            //            try
+            //            {
+            //                SyncListUpdater_.listBox1.Items.Clear();
+            //                string Sync_Manager = @"T:\Lopez\Sync_Manager.xlsx";
+            //                using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+            //                {
+            //                    ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+
+            //                    for (int row = 1; row < 20; row++)
+            //                    {
+            //                        if (sheet.Cells[row, 1].Value == null)
+            //                        {
+            //                            break;
+            //                        }
+            //                        if (sheet.Cells[row, 1].Value != null)
+            //                        {
+            //                            var Value1 = sheet.Cells[row, 1].Value;
+            //                            var Value2 = sheet.Cells[row, 2].Value;
+
+            //                            SyncListUpdater_.listBox1.Items.Add(Value1 + " + " + Value2.ToString());
+            //                        }
+
+            //                    }
+
+            //                    if (sheet.Cells[1, 1].Value != null && sheet.Cells[1, 2].Value.ToString() != user)
+            //                    {
+            //                        SyncListUpdater_.listBox1.Refresh();
+            //                        SyncListUpdater_.listBox1.Update();
+            //                        goto finder;
+            //                    }
+            //                    else
+            //                    {
+            //                        break;
+            //                    }
+            //                }
+            //            }
+            //            catch (Exception)
+            //            {
+
+            //                goto finder;
+
+            //            }
+            //        }
+            //    }
+
+            //finish_:;
+            //    SyncListUpdater_.Close();
+        }
+        public static void myDocumentSaved(object sender, DocumentSynchronizedWithCentralEventArgs args)
+        {
+            FirestoreDb db = datab_();
+            DeleteDocument(db);
+            //string user = args.Document.Application.Username;
+            //SyncListUpdater SyncListUpdater_ = new SyncListUpdater();
+            //try
+            //{
+            //    string Sync_Manager = @"T:\Lopez\Sync_Manager.xlsx";
+            //    using (ExcelPackage package = new ExcelPackage(new FileInfo(Sync_Manager)))
+            //    {
+            //        ExcelWorksheet sheet = package.Workbook.Worksheets.ElementAt(0);
+            //        if (sheet.Cells[1, 2].Value.ToString() == user)
+            //        {
+            //            sheet.DeleteRow(1, 1);
+            //            package.Save();
+            //        }
+            //    }
+            //}
+            //catch (Exception)
+            //{
+            //}
+        }
+
+        //public static void idleUpdate(object sender, IdlingEventArgs e)
+        //{
+        //    // set an initial value for the last saved time
+        //    if (lastSaveTime == System.DateTime.MinValue)
+        //        lastSaveTime = System.DateTime.Now;
+        //    System.DateTime now = System.DateTime.Now;
+
+        //    TimeSpan elapsedTime = now.Subtract(lastSaveTime);
+        //    double minutes = elapsedTime.Minutes;
+        //    UIApplication uiApp = sender as UIApplication;
+        //    uiApp.Application.WriteJournalComment("Idle check. Elapsed time = " + minutes, true);
+        //    if (minutes < 1)
+        //        return;
+
+        //    Autodesk.Revit.DB.Document doc = uiApp.ActiveUIDocument.Document;
+        //    if (!doc.IsWorkshared)
+        //        return;
+
+        //    TransactWithCentralOptions transact = new TransactWithCentralOptions();
+        //    SynchronizeWithCentralOptions synch = new SynchronizeWithCentralOptions();
+        //    synch.Comment = "Autosaved by the API at " + System.DateTime.Now;
+        //    RelinquishOptions relinquishOptions = new RelinquishOptions(true);
+        //    relinquishOptions.CheckedOutElements = true;
+        //    synch.SetRelinquishOptions(relinquishOptions);
+
+        //    uiApp.Application.WriteJournalComment("AutoSave To Central", true);
+        //    doc.SynchronizeWithCentral(transact, synch);
+        //    lastSaveTime = System.DateTime.Now;
+        //}
+    }
 
 
 
@@ -3010,6 +3261,11 @@ namespace STH_Automation_22
             string folderPath = System.IO.Path.Combine(appdataFolder, @"Autodesk\Revit\Addins\2022\STH_Automation_22\img");
             string dll = Assembly.GetExecutingAssembly().Location;
             string myRibbon_1 = "Test Tools";
+
+
+            application.ControlledApplication.DocumentSynchronizingWithCentral += new EventHandler<DocumentSynchronizingWithCentralEventArgs>(myCommand.myDocumentSaving);
+            application.ControlledApplication.DocumentSynchronizedWithCentral += new EventHandler<DocumentSynchronizedWithCentralEventArgs>(myCommand.myDocumentSaved);
+
 
             application.CreateRibbonTab(myRibbon_1);
             RibbonPanel panel_1 = application.CreateRibbonPanel(myRibbon_1, "STH");
